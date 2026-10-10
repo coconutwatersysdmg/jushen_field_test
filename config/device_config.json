@@ -1,0 +1,46 @@
+{
+  "_deprecated": "外接设备配置已迁移到 config/external_devices_config.py；本文件仅作备份，程序不再优先读取。",
+  "coordinate_frame": "world",
+  "unit": "mm",
+  "axis": {
+    "x": "right",
+    "y": "vehicle_forward",
+    "z": "up"
+  },
+  "calibration_source": "config/sensor_coordinate_config",
+  "radar": {
+    "calibration_name": "lidar",
+    "initial_pose": {
+      "x_mm": 0,
+      "y_mm": 500,
+      "z_mm": 1800,
+      "roll_deg": 0,
+      "pitch_deg": -15,
+      "yaw_deg": 0
+    }
+  },
+  "robots": {
+    "PICK_ARM": {
+      "role": "车尾左外侧初始位；沿双侧龙门架的纵轨、横梁运动",
+      "initial_pose": {"x_mm": -3500, "y_mm": 1000, "z_mm": 1800, "roll_deg": 0, "pitch_deg": 0, "yaw_deg": -90},
+      "cargo_mount_pose": {"x_mm": 0, "y_mm": 1100, "z_mm": -350, "roll_deg": 0, "pitch_deg": 0, "yaw_deg": 0}
+    }
+  },
+  "cameras": {
+    "CAM_PICK": {
+      "calibration_name": "hole_camera",
+      "parent_robot_id": "PICK_ARM",
+      "sensor": "RGB-D",
+      "role": "插孔、携货角点识别、临近托盘、放置及两面复检",
+      "mount_pose": {"x_mm": 250, "y_mm": 0, "z_mm": -80, "roll_deg": 0, "pitch_deg": 0, "yaw_deg": 180}
+    }
+  },
+  "camera_roles": {
+    "pallet_hole": "CAM_PICK",
+    "pre_pick_offset": "CAM_PICK",
+    "corner": "CAM_PICK",
+    "observe": "CAM_PICK",
+    "neighbor": "CAM_PICK",
+    "post": "CAM_PICK"
+  }
+}

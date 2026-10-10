@@ -1,0 +1,15 @@
+# jushen_field_test standalone deps — install into local .venv via 安装环境.bat
+PySide6==6.8.3
+pyqtdarktheme-fork==2.3.6
+qt-material==2.17
+Jinja2>=3.1
+darkdetect>=0.8
+numpy>=1.26
+opencv-python>=4.8
+torch>=2.1
+ultralytics>=8.0
+open3d>=0.17
+Pillow>=10.0
+PyMySQL>=1.1
+pymodbus>=3.6
+psutil>=5.9
