@@ -725,6 +725,7 @@ class MainWindow(QMainWindow):
 
         try:
             from config.offline_paths import get_offline_paths
+            from services.offline_pipeline import list_hik_corner_images
 
             cfg = get_offline_paths()
             try:
@@ -737,20 +738,11 @@ class MainWindow(QMainWindow):
                     _push(str(resolve_path(str(cfg.get("mech_depth")), kind="mech_depth")), "梅卡深度", "offline_paths")
             except Exception:
                 pass
-            by_point = dict(cfg.get("hik_corner_images_by_point") or {})
-            filled = {str(k): str(v).strip() for k, v in by_point.items() if str(v or "").strip()}
-            if filled:
-                for pid, raw in filled.items():
-                    try:
-                        _push(str(resolve_path(raw, kind=f"hik_{pid}")), f"海康角点 {pid}", "offline_paths")
-                    except Exception:
-                        pass
-            elif cfg.get("hik_corner_image"):
-                try:
-                    p = str(resolve_path(str(cfg.get("hik_corner_image")), kind="hik_corner_image"))
-                    _push(p, "海康角点图", "offline_paths")
-                except Exception:
-                    pass
+            try:
+                for img in list_hik_corner_images(cfg):
+                    _push(str(img), f"海康 {img.name}", "offline_paths")
+            except Exception:
+                pass
         except Exception:
             pass
         return entries

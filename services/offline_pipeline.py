@@ -15,30 +15,39 @@ RESULT_ROOT = PROJECT_ROOT / "workdir" / "field_test_results"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 
-def _newest_file(path: Path, suffixes: set[str]) -> Optional[Path]:
-    if path.is_file():
-        return path
-    if not path.is_dir():
-        return None
-    files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in suffixes]
-    if not files:
-        return None
-    return max(files, key=lambda p: p.stat().st_mtime)
-
-
-def resolve_path(raw: str, *, kind: str) -> Path:
+def _abs_path(raw: str) -> Path:
     text = str(raw or "").strip()
     if not text:
-        raise FileNotFoundError(f"未配置路径：{kind}（请改 config/offline_paths.py 里的 TODO）")
+        raise FileNotFoundError("路径为空（请改 config/offline_paths.py）")
     path = Path(text).expanduser()
     if not path.is_absolute():
         path = (PROJECT_ROOT / path).resolve()
+    return path
+
+
+def list_files(path: Path, suffixes: set[str]) -> List[Path]:
+    """List files under a directory (any filename), oldest first by mtime."""
+    if path.is_file():
+        return [path] if path.suffix.lower() in suffixes else []
+    if not path.is_dir():
+        return []
+    files = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() in suffixes]
+    return sorted(files, key=lambda p: (p.stat().st_mtime, p.name.lower()))
+
+
+def _newest_file(path: Path, suffixes: set[str]) -> Optional[Path]:
+    files = list_files(path, suffixes)
+    return files[-1] if files else None
+
+
+def resolve_path(raw: str, *, kind: str) -> Path:
+    path = _abs_path(raw)
     if kind == "radar_pcd":
         found = _newest_file(path, {".pcd"}) if path.is_dir() else path
         if found is None or not found.is_file():
             raise FileNotFoundError(f"找不到雷达 PCD：{path}")
         return found
-    if kind in {"mech_rgb", "mech_depth", "hik_corner_image"} or kind.startswith("hik_"):
+    if kind in {"mech_rgb", "mech_depth", "hik_corner_image", "hik_corner_dir"} or kind.startswith("hik_"):
         found = _newest_file(path, IMAGE_EXTS) if path.is_dir() else path
         if found is None or not found.is_file():
             raise FileNotFoundError(f"找不到图像：{kind} -> {path}")
@@ -59,23 +68,45 @@ def resolve_path(raw: str, *, kind: str) -> Path:
     return path
 
 
-def build_corner_image_map(cfg: Dict[str, Any], corner_ids: List[str]) -> Dict[str, str]:
-    by_point = dict(cfg.get("hik_corner_images_by_point") or {})
-    filled = {
-        str(pid): str(by_point.get(pid) or "").strip()
-        for pid in corner_ids
-        if str(by_point.get(pid) or "").strip()
-    }
-    if len(filled) == len(corner_ids):
-        return {pid: str(resolve_path(p, kind=f"hik_{pid}")) for pid, p in filled.items()}
+def list_hik_corner_images(cfg: Dict[str, Any]) -> List[Path]:
+    """Scan hik_corner_dir for images; filename does not matter."""
+    raw = str(cfg.get("hik_corner_dir") or "").strip()
+    if not raw:
+        # backward compatible: single file / old keys
+        single = str(cfg.get("hik_corner_image") or "").strip()
+        if single:
+            return [resolve_path(single, kind="hik_corner_image")]
+        return []
+    folder = _abs_path(raw)
+    if folder.is_file() and folder.suffix.lower() in IMAGE_EXTS:
+        return [folder]
+    if not folder.is_dir():
+        raise FileNotFoundError(f"海康角点文件夹不存在：{folder}")
+    images = list_files(folder, IMAGE_EXTS)
+    if not images:
+        raise FileNotFoundError(f"海康角点文件夹里没有图片（jpg/png/bmp）：{folder}")
+    return images
 
-    single = str(cfg.get("hik_corner_image") or "").strip()
-    if not single:
+
+def build_corner_image_map(cfg: Dict[str, Any], corner_ids: List[str]) -> Dict[str, str]:
+    """Map corner ids → image paths without relying on fixed filenames.
+
+    Folder rules:
+      - 1 photo  → every corner uses it
+      - N photos → assign in mtime order to P1..；不够则循环；多了只用前 N 个角点所需张数
+    """
+    ids = [str(pid) for pid in corner_ids]
+    images = list_hik_corner_images(cfg)
+    if not images:
         raise FileNotFoundError(
-            "未配置海康角点图：请填写 hik_corner_image，或按 P1..P4 填满 hik_corner_images_by_point"
+            "未配置海康角点图：请在 offline_paths.py 填写 hik_corner_dir（文件夹即可）"
         )
-    image = resolve_path(single, kind="hik_corner_image")
-    return {pid: str(image) for pid in corner_ids}
+    if len(images) == 1:
+        return {pid: str(images[0]) for pid in ids}
+    out: Dict[str, str] = {}
+    for i, pid in enumerate(ids):
+        out[pid] = str(images[i % len(images)])
+    return out
 
 
 class OfflinePipeline:
