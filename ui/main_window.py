@@ -541,11 +541,28 @@ class MainWindow(QMainWindow):
 
         text = format_report_text(report)
         ok = bool(report.get("ok"))
+        cache_note = ""
+        if ok:
+            try:
+                from services.algo_input_cache import cache_algo_inputs
+
+                cached = cache_algo_inputs()
+                n_r = len((cached.get("saved") or {}).get("radar") or [])
+                n_h = len((cached.get("saved") or {}).get("hik_corner") or [])
+                n_m = len((cached.get("saved") or {}).get("mech_hole") or [])
+                cache_note = (
+                    f"\n\n已拷到本机 workdir/algo_inputs/："
+                    f"雷达 {n_r} 个，海康 {n_h} 张，梅卡 {n_m} 张"
+                )
+                text = text + cache_note
+            except Exception as exc:
+                cache_note = f"\n\n本机缓存失败：{exc}"
+                text = text + cache_note
         try:
             self.controller.twin.add_message(
                 "OFFLINE_PATHS",
                 "SUCCESS" if ok else "WARNING",
-                str(report.get("summary") or ""),
+                str(report.get("summary") or "") + cache_note,
                 {
                     "errors": list(report.get("errors") or []),
                     "warnings": list(report.get("warnings") or []),
