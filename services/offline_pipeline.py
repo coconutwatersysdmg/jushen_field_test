@@ -40,6 +40,19 @@ def _newest_file(path: Path, suffixes: set[str]) -> Optional[Path]:
     return files[-1] if files else None
 
 
+def resolve_place_rgb(raw: str) -> Path:
+    """Pick a color photo from place_verify_dir; avoid *depth* filenames when possible."""
+    path = _abs_path(raw)
+    if path.is_file():
+        return path
+    files = list_files(path, IMAGE_EXTS)
+    if not files:
+        raise FileNotFoundError(f"第4步文件夹没有图片：{path}")
+    color = [p for p in files if "depth" not in p.stem.lower()]
+    pool = color or files
+    return pool[-1]
+
+
 def resolve_path(raw: str, *, kind: str) -> Path:
     path = _abs_path(raw)
     if kind == "radar_pcd":

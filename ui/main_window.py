@@ -550,9 +550,10 @@ class MainWindow(QMainWindow):
                 n_r = len((cached.get("saved") or {}).get("radar") or [])
                 n_h = len((cached.get("saved") or {}).get("hik_corner") or [])
                 n_m = len((cached.get("saved") or {}).get("mech_hole") or [])
+                n_p = len((cached.get("saved") or {}).get("place_verify") or [])
                 cache_note = (
                     f"\n\n已拷到本机 workdir/algo_inputs/："
-                    f"雷达 {n_r} 个，海康 {n_h} 张，梅卡 {n_m} 张"
+                    f"雷达 {n_r} 个，海康 {n_h} 张，梅卡 {n_m} 张，第4步 {n_p} 张"
                 )
                 text = text + cache_note
             except Exception as exc:

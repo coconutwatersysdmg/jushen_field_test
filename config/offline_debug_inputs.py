@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from config.offline_paths import PROJECT_ROOT, get_offline_paths
-from services.offline_pipeline import build_corner_image_map, resolve_path
+from services.offline_pipeline import build_corner_image_map, resolve_path, resolve_place_rgb
 
 
 def _abs(raw: str) -> str:
@@ -49,6 +49,35 @@ def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[
         images["pallet_hole"] = out["pallet_rgb"]
     if out.get("pallet_depth"):
         depths["pallet_hole"] = out["pallet_depth"]
+
+    # 第4步：放货检测离线图 → mock 相机 tag（不再走实验室真机拍照）
+    place_rgb = ""
+    place_depth = ""
+    raw_place = str(cfg.get("place_verify_dir") or "").strip()
+    if raw_place:
+        try:
+            place_rgb = str(resolve_place_rgb(raw_place))
+        except Exception:
+            place_rgb = _abs(raw_place)
+    raw_place_depth = str(cfg.get("place_depth") or "").strip()
+    if raw_place_depth:
+        try:
+            place_depth = str(resolve_path(raw_place_depth, kind="mech_depth"))
+        except Exception:
+            place_depth = _abs(raw_place_depth)
+    if not place_rgb and out.get("pallet_rgb"):
+        place_rgb = str(out.get("pallet_rgb") or "")
+    if not place_depth and out.get("pallet_depth"):
+        place_depth = str(out.get("pallet_depth") or "")
+    if place_rgb:
+        images["lab_place_verify"] = place_rgb
+        images["lab_pre_place_monitor"] = place_rgb
+        out["place_verify_rgb"] = place_rgb
+    if place_depth:
+        depths["lab_place_verify"] = place_depth
+        depths["lab_pre_place_monitor"] = place_depth
+        out["place_verify_depth"] = place_depth
+
     out["images"] = images
     out["depths"] = depths
 

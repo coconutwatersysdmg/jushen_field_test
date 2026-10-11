@@ -6,7 +6,7 @@ import sys
 from typing import Any, Dict, List
 
 from config.offline_paths import get_offline_paths
-from services.offline_pipeline import list_hik_corner_images, resolve_path
+from services.offline_pipeline import list_hik_corner_images, resolve_path, resolve_place_rgb
 
 
 def _log(msg: str) -> None:
@@ -58,6 +58,22 @@ def validate_offline_paths(cfg: Dict[str, Any] | None = None) -> Dict[str, Any]:
             resolved[key] = str(found)
         except Exception as exc:
             warnings.append(f"{title} 配置了但读不到：{exc}")
+
+    raw_place = str(data.get("place_verify_dir") or "").strip()
+    if not raw_place:
+        warnings.append("第4步放货检测照片（place_verify_dir）未配置（可选；不填则第4步可能软跳过）。")
+    else:
+        try:
+            found = resolve_place_rgb(raw_place)
+            resolved["place_verify_dir"] = str(found)
+        except Exception as exc:
+            warnings.append(f"第4步放货检测照片读不到：{exc}")
+    raw_place_depth = str(data.get("place_depth") or "").strip()
+    if raw_place_depth:
+        try:
+            resolved["place_depth"] = str(resolve_path(raw_place_depth, kind="mech_depth"))
+        except Exception as exc:
+            warnings.append(f"第4步深度图读不到：{exc}")
 
     ok = not errors
     if ok and not warnings:

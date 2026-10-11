@@ -8,16 +8,17 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from config.offline_paths import PROJECT_ROOT
-from services.offline_pipeline import list_hik_corner_images, resolve_path
+from services.offline_pipeline import list_hik_corner_images, resolve_path, resolve_place_rgb
 
 CACHE_ROOT = PROJECT_ROOT / "workdir" / "algo_inputs"
 RADAR_DIR = CACHE_ROOT / "radar"
 HIK_DIR = CACHE_ROOT / "hik_corner"
 MECH_DIR = CACHE_ROOT / "mech_hole"
+PLACE_DIR = CACHE_ROOT / "place_verify"
 
 
 def _ensure_dirs() -> None:
-    for folder in (RADAR_DIR, HIK_DIR, MECH_DIR):
+    for folder in (RADAR_DIR, HIK_DIR, MECH_DIR, PLACE_DIR):
         folder.mkdir(parents=True, exist_ok=True)
 
 
@@ -37,7 +38,12 @@ def cache_algo_inputs(cfg: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
     data = dict(cfg or get_offline_paths())
     _ensure_dirs()
-    saved: Dict[str, List[str]] = {"radar": [], "hik_corner": [], "mech_hole": []}
+    saved: Dict[str, List[str]] = {
+        "radar": [],
+        "hik_corner": [],
+        "mech_hole": [],
+        "place_verify": [],
+    }
     errors: List[str] = []
 
     raw_pcd = str(data.get("radar_pcd") or "").strip()
@@ -64,9 +70,23 @@ def cache_algo_inputs(cfg: Dict[str, Any] | None = None) -> Dict[str, Any]:
         except Exception as exc:
             errors.append(f"{key}: {exc}")
 
+    raw_place = str(data.get("place_verify_dir") or "").strip()
+    if raw_place:
+        try:
+            saved["place_verify"].append(_copy_one(resolve_place_rgb(raw_place), PLACE_DIR))
+        except Exception as exc:
+            errors.append(f"place_verify: {exc}")
+    raw_place_depth = str(data.get("place_depth") or "").strip()
+    if raw_place_depth:
+        try:
+            saved["place_verify"].append(_copy_one(resolve_path(raw_place_depth, kind="mech_depth"), PLACE_DIR))
+        except Exception as exc:
+            errors.append(f"place_depth: {exc}")
+
+    any_saved = any(saved[k] for k in saved)
     return {
         "cache_root": str(CACHE_ROOT),
         "saved": saved,
         "errors": errors,
-        "ok": not errors or bool(saved["radar"] or saved["hik_corner"] or saved["mech_hole"]),
+        "ok": not errors or any_saved,
     }

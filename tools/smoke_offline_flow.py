@@ -67,11 +67,6 @@ def _stub_heavy_algo(ctrl) -> None:
     ctrl._radar_task = _fake_radar  # type: ignore[method-assign]
     ctrl._lab_pick_recognize = _fake_pick  # type: ignore[method-assign]
     ctrl._lab_corner_shell = _fake_corner_shell  # type: ignore[method-assign]
-    # Avoid blocking manual-place / monitor hard fails in first cycle
-    ctrl._lab_pre_place_monitor = lambda: {"success": True, "message": "SMOKE stub pre-place"}  # type: ignore
-    ctrl._lab_place_verify = lambda: {"success": True, "message": "SMOKE stub place verify", "status": "IN_ZONE"}  # type: ignore
-    ctrl._lab_return_origin = lambda: {"success": True, "message": "SMOKE stub return origin"}  # type: ignore
-
 
 def main() -> int:
     from config.offline_path_check import format_report_text, validate_offline_paths
