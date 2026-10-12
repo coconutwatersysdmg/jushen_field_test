@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Adapter for the laboratory traditional OpenCV fork-hole algorithm."""
+"""Adapter for the field-offline traditional OpenCV fork-hole algorithm."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from algorithm_modules.lab.fork_hole_lab.fork_hole_locator import locate_fork_holes
+from algorithm_modules.field_offline.fork_hole.fork_hole_locator import locate_fork_holes
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

@@ -55,7 +55,7 @@ def _detect_two_holes(image_bgr: np.ndarray, dark_threshold: int | None = None):
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # The field image is much darker than the earlier lab images, so a fixed
+    # Field images vary greatly in brightness, so a fixed
     # threshold is brittle.  Use the image's own lower-intensity distribution
     # to adapt to exposure while keeping a conservative range for the black
     # fork-hole interiors.  A caller can still pass an explicit threshold.

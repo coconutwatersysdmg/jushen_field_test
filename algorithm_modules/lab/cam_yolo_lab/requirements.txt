@@ -1,4 +1,0 @@
-numpy
-ultralytics
-pyrealsense2
-torch

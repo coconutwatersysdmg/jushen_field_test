@@ -89,6 +89,21 @@ class FieldOnlyModeTests(unittest.TestCase):
         self.assertNotIn("profile_combo", names)
         self.assertNotIn("list_run_profiles", names)
 
+    def test_field_algorithms_have_no_laboratory_package(self):
+        self.assertFalse((ROOT / "algorithm_modules" / "lab").exists())
+
+        from algorithm_modules.field_offline.camera_transform import CameraWorldTransform
+        from algorithm_modules.field_offline.dynamic_box_monitor import analyze_image
+        from algorithm_modules.field_offline.fork_hole import locate_fork_holes
+        from services.corner_recognition_service import CornerRecognitionService
+
+        self.assertTrue(callable(CameraWorldTransform.from_json))
+        self.assertTrue(callable(analyze_image))
+        self.assertTrue(callable(locate_fork_holes))
+        field_corner_model = ROOT / "models" / "corner_service.pt"
+        self.assertTrue(field_corner_model.is_file())
+        self.assertEqual(CornerRecognitionService().model_path, field_corner_model.resolve())
+
 
 if __name__ == "__main__":
     unittest.main()

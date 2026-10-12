@@ -3,15 +3,15 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping, Sequence
 
-from algorithm_modules.lab.cam_yolo_lab.camera_world_module import CameraWorldTransform
+from algorithm_modules.field_offline.camera_transform import CameraWorldTransform
 
 
 LAB_CORNER_PAIRS = (("P3", "P4"), ("P1", "P2"))
-LAB_CAMERA_Z_MM = 380.0
-LAB_CAMERA_R_DEG = -80.0
+FIELD_CAMERA_Z_MM = 380.0
+FIELD_CAMERA_R_DEG = -80.0
 
 
-def merge_lab_corner_points(
+def merge_field_corner_points(
     radar_points: Mapping[str, Any],
     camera_points: Mapping[str, Any] | None,
 ) -> dict[str, dict[str, Any]]:
@@ -41,8 +41,8 @@ def merge_lab_corner_points(
     return merged
 
 
-class LabCameraVisitPlanner:
-    """Plan the archived laboratory two-shot camera visit in WORLD coordinates."""
+class FieldCameraVisitPlanner:
+    """规划现场离线相机在 WORLD 坐标中的访问位置。"""
 
     def __init__(self, transform: CameraWorldTransform):
         self.transform = transform
@@ -53,11 +53,11 @@ class LabCameraVisitPlanner:
         planning_pose: Mapping[str, float] | None = None,
     ) -> list[dict[str, Any]]:
         pose = dict(planning_pose or {})
-        z = float(pose.get("z", LAB_CAMERA_Z_MM))
+        z = float(pose.get("z", FIELD_CAMERA_Z_MM))
         # R 由启动锁定角度传入；不再强制改成 -80
-        r = float(pose.get("r", LAB_CAMERA_R_DEG))
-        if not math.isclose(z, LAB_CAMERA_Z_MM):
-            raise ValueError(f"实验室相机访问姿态 Z 必须是 {LAB_CAMERA_Z_MM}，当前为 {z}")
+        r = float(pose.get("r", FIELD_CAMERA_R_DEG))
+        if not math.isclose(z, FIELD_CAMERA_Z_MM):
+            raise ValueError(f"现场离线相机访问姿态 Z 必须是 {FIELD_CAMERA_Z_MM}，当前为 {z}")
 
         targets: list[dict[str, Any]] = []
         for pair in LAB_CORNER_PAIRS:
@@ -65,7 +65,7 @@ class LabCameraVisitPlanner:
             center = tuple(sum(point[index] for point in points) / 2.0 for index in range(3))
             xy = self.transform.plc_xy_for_camera_axis_target(
                 center,
-                {"x": 0.0, "y": 0.0, "z": LAB_CAMERA_Z_MM, "r": r},
+                {"x": 0.0, "y": 0.0, "z": FIELD_CAMERA_Z_MM, "r": r},
             )
             targets.append(
                 {
@@ -74,7 +74,7 @@ class LabCameraVisitPlanner:
                     "plc_command": {
                         "X": float(xy["X"]),
                         "Y": float(xy["Y"]),
-                        "Z": LAB_CAMERA_Z_MM,
+                        "Z": FIELD_CAMERA_Z_MM,
                         "R": float(r),
                     },
                 }
@@ -91,12 +91,12 @@ class LabCameraVisitPlanner:
         """让相机光轴对准一个 WORLD 点；Z 固定，R 保持启动时角度。"""
         values = tuple(float(value) for value in target_world[:3])
         if len(values) != 3 or not all(math.isfinite(value) for value in values):
-            raise ValueError("实验室相机目标 WORLD 坐标无效")
+            raise ValueError("现场离线相机目标 WORLD 坐标无效")
         pose = dict(planning_pose or {})
-        z = float(pose.get("z", LAB_CAMERA_Z_MM))
-        r = float(pose.get("r", LAB_CAMERA_R_DEG))
-        if not math.isclose(z, LAB_CAMERA_Z_MM):
-            raise ValueError(f"实验室相机访问姿态 Z 必须是 {LAB_CAMERA_Z_MM}，当前为 {z}")
+        z = float(pose.get("z", FIELD_CAMERA_Z_MM))
+        r = float(pose.get("r", FIELD_CAMERA_R_DEG))
+        if not math.isclose(z, FIELD_CAMERA_Z_MM):
+            raise ValueError(f"现场离线相机访问姿态 Z 必须是 {FIELD_CAMERA_Z_MM}，当前为 {z}")
         xy = self.transform.plc_xy_for_camera_axis_target(
             values,
             {"x": 0.0, "y": 0.0, "z": z, "r": r},
@@ -122,7 +122,7 @@ class LabCameraVisitPlanner:
         if not cfg:
             raise ValueError("world_to_gantry 映射为空")
         if bool(cfg.get("placeholder", False)):
-            raise ValueError("world_to_gantry.placeholder=True，不能规划实验室相机移动")
+            raise ValueError("world_to_gantry.placeholder=True，不能规划现场离线相机移动")
         world_origin = dict(cfg.get("world_origin_mm") or {})
         gantry_origin = dict(cfg.get("gantry_origin_xyzr") or {})
         scale = dict(cfg.get("scale") or {})

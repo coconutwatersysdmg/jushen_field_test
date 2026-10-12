@@ -97,7 +97,7 @@ class SpaceManager:
         cargo_id: str,
         monitor_result: Mapping[str, Any],
     ) -> Dict[str, Any] | None:
-        """实验室手动放货：只有四角 WORLD 判定通过才占用该区域。"""
+        """现场手动放货：只有四角 WORLD 判定通过才占用该区域。"""
         if not bool((monitor_result or {}).get("inside_planned_region")):
             return None
         target = str(region_id)

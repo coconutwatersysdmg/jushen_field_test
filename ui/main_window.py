@@ -752,7 +752,7 @@ class MainWindow(QMainWindow):
 
     def _current_flow_camera_entries(self) -> list[dict]:
         """Offline configured photos + current-flow captures."""
-        from services.lab_camera_gallery import build_lab_camera_gallery_entries
+        from services.field_camera_gallery import build_field_camera_gallery_entries
 
         live = list(getattr(self.controller, "lab_camera_gallery", None) or [])
         entries: list[dict] = []
@@ -782,7 +782,7 @@ class MainWindow(QMainWindow):
             if isinstance(item, dict):
                 _push(item)
 
-        built = build_lab_camera_gallery_entries(
+        built = build_field_camera_gallery_entries(
             getattr(self.controller, "round_data", {}) or {},
             round_index=int(getattr(self.controller, "round_index", 0) or 0) + 1,
         )

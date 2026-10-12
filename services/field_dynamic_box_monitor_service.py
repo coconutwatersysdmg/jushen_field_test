@@ -133,7 +133,7 @@ def evaluate_selected_box_world(
     return result
 
 
-class LabDynamicBoxMonitorService:
+class FieldDynamicBoxMonitorService:
     """接入现场动态监测：RGB 找箱角，Depth+外参转 WORLD 后判区。"""
 
     def __init__(
@@ -158,7 +158,7 @@ class LabDynamicBoxMonitorService:
         self._depth_sampler = depth_sampler or self.calibration.sample_depth
         self._image_writer = image_writer or self._write_image
         self.config_path = Path(config_path) if config_path else (
-            PROJECT_ROOT / "algorithm_modules" / "lab" / "dynamic_box_monitor" / "config.json"
+            PROJECT_ROOT / "algorithm_modules" / "field_offline" / "dynamic_box_monitor" / "config.json"
         )
         self._config: dict[str, Any] | None = None
         self.lab_world_transform: Any | None = None
@@ -180,7 +180,7 @@ class LabDynamicBoxMonitorService:
 
     def _lab_camera_transform(self):
         if self.lab_world_transform is None:
-            from algorithm_modules.lab.cam_yolo_lab.camera_world_module import CameraWorldTransform
+            from algorithm_modules.field_offline.camera_transform import CameraWorldTransform
 
             self.lab_world_transform = CameraWorldTransform.from_json(PROJECT_ROOT / "config" / "camera_extrinsic.json")
         return self.lab_world_transform
@@ -205,7 +205,7 @@ class LabDynamicBoxMonitorService:
         return bool(write_image(path, image))
 
     def _detector_and_config(self):
-        from algorithm_modules.lab.dynamic_box_monitor.dynamic_box_monitor import (
+        from algorithm_modules.field_offline.dynamic_box_monitor.dynamic_box_monitor import (
             analyze_image,
             load_config,
         )
@@ -251,7 +251,7 @@ class LabDynamicBoxMonitorService:
             world = self._lab_camera_transform().camera_to_world(camera, plc_pose)
             transform_name = "lab_camera_plc_extrinsic"
         else:
-            # 保留非实验室调用的兼容路径；实验室流程必定传入 plc_pose。
+            # 兼容缺少 plc_pose 的历史采集文件。
             world_matrix = self.calibration.dynamic_camera_world_matrix(capture.get("camera_world_pose") or {})
             world = self.calibration.transform_point(world_matrix, camera)
             transform_name = "legacy_dynamic_camera_pose"
@@ -289,7 +289,7 @@ class LabDynamicBoxMonitorService:
         rgb_path = str(capture.get("rgb_path") or capture.get("image_path") or "")
         depth_path = str(capture.get("depth_path") or "")
         if not capture.get("success") or not rgb_path or not depth_path:
-            raise RuntimeError("实验室动态监测必须取得真实 RGB + 对齐深度")
+            raise RuntimeError("现场离线动态监测必须取得 RGB + 对齐深度")
         image = self._image_reader(rgb_path)
         detector, config = self._detector_and_config()
         detection, annotated, mask = detector(image, config, planned_region_uv=None)
