@@ -90,8 +90,10 @@ def _radar_metrics(board: Any) -> Dict[str, float] | None:
 
 def _camera_world_corners(round_data: Mapping[str, Any]) -> Mapping[str, Any]:
     shell = round_data.get("lab_corner_shell")
-    if isinstance(shell, Mapping) and isinstance(shell.get("camera_world_corners"), Mapping):
-        return shell["camera_world_corners"]
+    if isinstance(shell, Mapping):
+        nested = shell.get("camera_world_corners")
+        if isinstance(nested, Mapping) and nested:
+            return nested
     direct = round_data.get("camera_world_corners")
     return direct if isinstance(direct, Mapping) else {}
 

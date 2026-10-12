@@ -117,6 +117,19 @@ class BoardDataServiceTests(unittest.TestCase):
         self.assertIsNone(boards[0]["camera"])
         self.assertIsNone(boards[1]["camera"])
 
+    def test_empty_nested_camera_result_uses_valid_top_level_camera_world_corners(self):
+        camera = {
+            "P1": point(0, 0, 100), "P2": point(2000, 0, 100),
+            "P3": point(0, -4000, 100), "P4": point(2000, -4000, 100),
+        }
+
+        boards = build_board_data({
+            "lab_corner_shell": {"camera_world_corners": {}},
+            "camera_world_corners": camera,
+        })
+
+        self.assertEqual(boards[0]["camera"]["length_mm"], 4000.0)
+
     def test_malformed_camera_point_blanks_only_its_source_row(self):
         radar = {
             "length_mm": 6000, "width_mm": 2400, "height_mean_mm": 1200,
