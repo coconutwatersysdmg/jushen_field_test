@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""现场离线联调：由相机最终 WORLD 角点生成后台装载区域。"""
+"""实验室模式：由相机最终 WORLD 角点生成后台装载区域。"""
 from __future__ import annotations
 
 from copy import deepcopy

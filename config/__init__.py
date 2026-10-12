@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """项目配置包。
 
-- 功能开关 / 现场离线联调：config.feature_switches
+- 功能开关 / 三模式：config.feature_switches（优先改这里或界面切换）
 - 外接设备：config.external_devices_config（IP、外参路径、限位等）
 - 系统/算法：config.system_config
 """
@@ -21,6 +21,8 @@ from config.feature_switches import (
     CORNER_REVIEW_AUTO_ACCEPT_DEMO,
     CORNER_REVIEW_ENABLED,
     RUN_PROFILE,
+    USE_LAB_CAMERA_ALGO,
+    USE_LAB_LIDAR_ALGO,
     USE_LIVE_LIDAR_CAPTURE,
     apply_run_profile,
     get_run_profile,
@@ -38,6 +40,8 @@ __all__ = [
     "USE_LIVE_LIDAR_CAPTURE",
     "CORNER_REVIEW_ENABLED",
     "CORNER_REVIEW_AUTO_ACCEPT_DEMO",
+    "USE_LAB_LIDAR_ALGO",
+    "USE_LAB_CAMERA_ALGO",
     "apply_run_profile",
     "get_run_profile",
     "list_run_profiles",

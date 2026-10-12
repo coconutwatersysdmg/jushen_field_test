@@ -43,10 +43,6 @@ class MockPLCAdapter(PLCAdapter):
         self.twin.add_message(module, status, message, data)
         return {"success": True, "module": module, "status": status, "message": message, "data": data}
 
-    def read_positions(self) -> dict[str, float]:
-        """提供现场离线坐标链所需的固定 Mock XYZR。"""
-        return {"X": 0.0, "Y": 0.0, "Z": 380.0, "R": 0.0}
-
     def move_absolute_xyzr(
         self,
         targets,

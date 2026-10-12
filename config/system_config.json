@@ -1,10 +1,9 @@
 {
-  "_todo": "现场离线联调固定使用 Mock 设备和 config/offline_paths.py 中的离线文件路径",
+  "_todo": "TODO 现场联调前改本文件：runtime.device_mode=real；devices.plc 填现场 PLC IP/端口；devices.gantry 配 world_to_gantry 并 allow_real_motion=true；plc.ack_timeout_ms 按现场调",
   "runtime": {
     "device_mode": "mock",
     "allow_demo_device_data": true,
-    "allow_unimplemented_vision_measurement_zero": true,
-    "run_profile": "field"
+    "allow_unimplemented_vision_measurement_zero": true
   },
   "devices": {
     "plc": {
