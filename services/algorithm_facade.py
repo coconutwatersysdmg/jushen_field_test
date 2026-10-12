@@ -6,7 +6,7 @@ from services.pallet_hole_recognition_service import PalletHoleRecognitionServic
 from services.pallet_cargo_offset_service import PalletCargoOffsetService
 from services.point_cloud_processing_service import PointCloudProcessingService
 from services.corner_recognition_service import CornerRecognitionService
-from services.field_camera_transform_service import FieldCameraTransformService
+from services.lab_camera_adapter import LabCameraCornerService
 from services.traditional_fork_hole_service import TraditionalForkHoleService
 
 
@@ -23,12 +23,12 @@ class AlgorithmFacade:
         self.offset = PalletCargoOffsetService()
         self.point_cloud = PointCloudProcessingService()
         self.corner = CornerRecognitionService()
-        self._camera_transform: FieldCameraTransformService | None = None
+        self._camera_transform: LabCameraCornerService | None = None
         self._traditional_fork_hole: TraditionalForkHoleService | None = None
 
-    def _field_camera_transform_service(self) -> FieldCameraTransformService:
+    def _field_camera_transform_service(self) -> LabCameraCornerService:
         if self._camera_transform is None:
-            self._camera_transform = FieldCameraTransformService()
+            self._camera_transform = LabCameraCornerService()
         return self._camera_transform
 
     def _traditional_fork_hole_service(self) -> TraditionalForkHoleService:

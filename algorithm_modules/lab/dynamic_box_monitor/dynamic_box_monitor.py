@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""现场离线动态监测：使用 CIE LAB 颜色空间提取纸箱四角。"""
+"""用户 dynamic_monitor_lab：LAB 颜色分割提取纸箱四角。"""
 from __future__ import annotations
 
 import json
@@ -38,7 +38,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
 def _require_cv2():
     if cv2 is None:
-        raise RuntimeError("现场动态监测需要 opencv-python")
+        raise RuntimeError("dynamic_monitor_lab 需要 opencv-python")
     return cv2
 
 

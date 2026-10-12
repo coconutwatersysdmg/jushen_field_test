@@ -10,7 +10,7 @@ from services.camera_board_geometry_service import CameraBoardGeometryService
 from services.space_manager import SpaceManager
 
 
-FIELD_EQUAL_ROW_COUNT = 5
+LAB_EQUAL_ROW_COUNT = 5
 
 
 def _world_xyz(point: Any) -> list[float]:
@@ -23,7 +23,7 @@ def _world_xyz(point: Any) -> list[float]:
     else:
         values = list(point[:3])
     if len(values) != 3 or any(value is None for value in values):
-        raise RuntimeError(f"现场离线最终 WORLD 角点无效：{point!r}")
+        raise RuntimeError(f"实验室最终 WORLD 角点无效：{point!r}")
     return [float(value) for value in values]
 
 
@@ -42,18 +42,18 @@ def _rounded(point: Sequence[float]) -> list[float]:
     return [round(float(value), 3) for value in point]
 
 
-def _equal_field_regions_from_world_corners(
+def _equal_lab_regions_from_world_corners(
     final_world_points: Mapping[str, Any],
     corner_ids: Sequence[str],
     *,
-    row_count: int = FIELD_EQUAL_ROW_COUNT,
+    row_count: int = LAB_EQUAL_ROW_COUNT,
 ) -> tuple[list[dict[str, Any]], float]:
     """使用相机最终 WORLD 边界插值生成两列×等长五排。"""
     ids = [str(value) for value in corner_ids]
     if len(ids) not in {4, 6}:
-        raise RuntimeError(f"现场离线等分需要 4/6 个最终 WORLD 角点，当前：{ids}")
+        raise RuntimeError(f"实验室等分需要 4/6 个最终 WORLD 角点，当前：{ids}")
     if any(point_id not in final_world_points for point_id in ids):
-        raise RuntimeError("现场离线最终 WORLD 角点不完整")
+        raise RuntimeError("实验室最终 WORLD 角点不完整")
     start_left = _world_xyz(final_world_points[ids[0]])
     start_right = _world_xyz(final_world_points[ids[1]])
     end_left = _world_xyz(final_world_points[ids[-2]])
@@ -79,7 +79,7 @@ def _equal_field_regions_from_world_corners(
             center = [sum(point[axis] for point in corners) / 4.0 for axis in range(3)]
             region_id = f"{column}{row_index}"
             regions.append({
-                "section": "FIELD_EQUAL_WORLD_GRID",
+                "section": "LAB_EQUAL_WORLD_GRID",
                 "local_row_index": row_index,
                 "column": column,
                 "row_length_mm": round(row_length_mm, 3),
@@ -95,8 +95,8 @@ def _equal_field_regions_from_world_corners(
     return regions, round(row_length_mm, 3)
 
 
-def _relabel_field_regions_from_p1_p2(geometry: dict[str, Any]) -> dict[str, Any]:
-    """现场图片约定：P1/P2 端为第 1 排，向 P3/P4 递增。"""
+def _relabel_lab_regions_from_p1_p2(geometry: dict[str, Any]) -> dict[str, Any]:
+    """实验室按图片约定编号：P1/P2 端为第 1 排，向 P3/P4 递增。"""
     out = deepcopy(geometry)
     regions = list(out.get("regions") or [])
     regions.sort(key=lambda item: (
@@ -107,7 +107,7 @@ def _relabel_field_regions_from_p1_p2(geometry: dict[str, Any]) -> dict[str, Any
         row = int(region.get("local_row_index", 0) or 0)
         column = str(region.get("column") or "")
         if row <= 0 or column not in {"A", "B"}:
-            raise RuntimeError(f"现场区域编号无效：column={column!r}, row={row}")
+            raise RuntimeError(f"实验室区域编号无效：column={column!r}, row={row}")
         code = f"{column}{row}"
         region["blind_code"] = code
         region["region_id"] = code
@@ -115,8 +115,8 @@ def _relabel_field_regions_from_p1_p2(geometry: dict[str, Any]) -> dict[str, Any
     return out
 
 
-def field_b_regions(space_snapshot: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """返回现场实际装货列，固定 B1 → B2 → … → B5。"""
+def lab_b_regions(space_snapshot: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """返回实验室实际装货列，固定 B1 → B2 → … → B5。"""
     regions = [
         deepcopy(region)
         for region in (space_snapshot.get("regions") or [])
@@ -126,15 +126,15 @@ def field_b_regions(space_snapshot: Mapping[str, Any]) -> list[dict[str, Any]]:
     return regions
 
 
-def field_b_region_for_round(space_snapshot: Mapping[str, Any], round_index: int) -> dict[str, Any]:
-    regions = field_b_regions(space_snapshot)
+def lab_b_region_for_round(space_snapshot: Mapping[str, Any], round_index: int) -> dict[str, Any]:
+    regions = lab_b_regions(space_snapshot)
     index = int(round_index)
     if index < 0 or index >= len(regions):
-        raise RuntimeError(f"现场 B 列没有第 {index + 1} 个可用区域")
+        raise RuntimeError(f"实验室 B 列没有第 {index + 1} 个可用区域")
     return regions[index]
 
 
-def build_field_space_plan(
+def build_lab_space_plan(
     final_world_points: Mapping[str, Any],
     corner_ids: Sequence[str],
     *,
@@ -144,8 +144,8 @@ def build_field_space_plan(
 ) -> dict[str, Any]:
     """把最终 WORLD 角点划分为区域，但不生成 UI 专用显示数据。
 
-    require_camera_source=True：角点必须来自相机 YOLO。
-    require_camera_source=False（现场离线雷达 WORLD）：允许非相机角点划格。
+    require_camera_source=True（实验室默认）：角点必须来自相机 YOLO。
+    require_camera_source=False（真实环境循环、雷达兜底）：允许非相机角点划格。
     """
     ids = [str(value) for value in corner_ids]
     non_camera = [
@@ -160,23 +160,23 @@ def build_field_space_plan(
     geometry_service = board_geometry or CameraBoardGeometryService()
     manager = space_manager or SpaceManager()
     geometry = geometry_service.analyze(dict(final_world_points), ids)
-    equal_regions, equal_row_length_mm = _equal_field_regions_from_world_corners(
+    equal_regions, equal_row_length_mm = _equal_lab_regions_from_world_corners(
         final_world_points,
         ids,
     )
     geometry["regions"] = equal_regions
-    geometry["field_equal_row_count"] = FIELD_EQUAL_ROW_COUNT
-    geometry["field_equal_column_count"] = 2
-    geometry["field_grid_source"] = "final_world_corners"
+    geometry["lab_equal_row_count"] = LAB_EQUAL_ROW_COUNT
+    geometry["lab_equal_column_count"] = 2
+    geometry["lab_grid_source"] = "final_world_corners"
     geometry["row_length_mm"] = equal_row_length_mm
     geometry["remaining_length_mm"] = 0.0
     if require_camera_source:
-        geometry["message"] = "现场相机最终 WORLD 四角已动态等分为两列×五排"
+        geometry["message"] = "实验室相机最终 WORLD 四角已动态等分为两列×五排"
     else:
         geometry["message"] = "WORLD 角点已动态等分为两列×五排（允许非相机源）"
-    geometry = _relabel_field_regions_from_p1_p2(geometry)
+    geometry = _relabel_lab_regions_from_p1_p2(geometry)
     space = manager.initialize_from_camera_geometry(geometry)
-    loading_order = [region["region_id"] for region in field_b_regions(space)]
+    loading_order = [region["region_id"] for region in lab_b_regions(space)]
     return {
         "success": True,
         "geometry": deepcopy(geometry),

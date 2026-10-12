@@ -1,10 +1,10 @@
-托盘叉孔定位模块（现场离线插孔识别）
+托盘叉孔定位模块（实验室插孔识别）
 ================================
 
 来源：fork_hole_final_stable.zip
 
 对外接口：
-    from algorithm_modules.field_offline.fork_hole import locate_fork_holes
+    from algorithm_modules.lab.fork_hole_lab import locate_fork_holes
 
 世界坐标转换由主流程完成。
 

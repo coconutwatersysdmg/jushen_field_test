@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""从 round_data 汇总现场离线相机照片与识别摘要（供 UI / 测试）。"""
+"""从 round_data 汇总实验室相机照片与识别摘要（供 UI / 测试）。"""
 from __future__ import annotations
 
 from typing import Any, Mapping
@@ -21,7 +21,7 @@ def _corner_summary(world_points: Mapping[str, Any] | None) -> str:
     return "；".join(parts)
 
 
-def build_field_camera_gallery_entries(
+def build_lab_camera_gallery_entries(
     round_data: Mapping[str, Any] | None,
     *,
     round_index: int = 0,

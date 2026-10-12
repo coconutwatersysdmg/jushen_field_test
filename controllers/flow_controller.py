@@ -15,11 +15,11 @@ from core.digital_twin_state import DigitalTwinState
 from core.geometry import Pose6D, parent_pose_for_child
 from devices.device_factory import create_device_adapters
 from services.algorithm_facade import AlgorithmFacade
-from services.field_camera_visit_planner import FIELD_CAMERA_Z_MM, FieldCameraVisitPlanner, merge_field_corner_points
-from services.field_space_planner import (
-    build_field_space_plan,
-    field_b_region_for_round,
-    field_b_regions,
+from services.lab_camera_visit_planner import LAB_CAMERA_Z_MM, LabCameraVisitPlanner, merge_lab_corner_points
+from services.lab_space_planner import (
+    build_lab_space_plan,
+    lab_b_region_for_round,
+    lab_b_regions,
 )
 from services.field_cycle_policy import field_steps_for_round
 from services.board_spec_utils import (
@@ -28,7 +28,7 @@ from services.board_spec_utils import (
     merge_board_specs,
     resolve_pallet_specs,
 )
-from services.field_dynamic_box_monitor_service import FieldDynamicBoxMonitorService
+from services.lab_dynamic_box_monitor_service import LabDynamicBoxMonitorService
 from services.sensor_calibration_service import SensorCalibrationService
 from services.camera_corner_world_service import CameraCornerWorldService
 from services.camera_board_geometry_service import CameraBoardGeometryService
@@ -78,7 +78,7 @@ class FlowController:
 
     def _resolve_b_region_for_round(self) -> dict[str, Any]:
         try:
-            return field_b_region_for_round(self.space.snapshot(), self.round_index)
+            return lab_b_region_for_round(self.space.snapshot(), self.round_index)
         except Exception:
             if self._is_offline_field_test():
                 return self._offline_dummy_b_region()
@@ -110,7 +110,7 @@ class FlowController:
             self.camera.set_demo_enabled(self.allow_demo)
         self.algorithms = algorithms or AlgorithmFacade()
         self.calibration = SensorCalibrationService()
-        self.field_box_monitor = FieldDynamicBoxMonitorService(calibration=self.calibration)
+        self.lab_box_monitor = LabDynamicBoxMonitorService(calibration=self.calibration)
         c_cfg = self.system_config.get("camera_corner_world") or {}
         self.corner_world = CameraCornerWorldService(self.calibration, depth_window=int(c_cfg.get("depth_sample_window", 5)))
         g_cfg = self.system_config.get("camera_board_geometry") or {}
@@ -957,7 +957,7 @@ class FlowController:
                     "message": f"传统插孔算法识别失败：{exc}",
                 }
             self._evidence(
-                "FIELD_PALLET_HOLE_TRADITIONAL",
+                "LAB_PALLET_HOLE_TRADITIONAL",
                 {"rgb_path": cap["rgb_path"], "depth_path": cap["depth_path"]},
                 hole,
                 started,
@@ -976,7 +976,7 @@ class FlowController:
             }
             started = perf_counter()
             self._evidence(
-                "FIELD_PALLET_HOLE_TRADITIONAL",
+                "LAB_PALLET_HOLE_TRADITIONAL",
                 {"rgb_path": "", "depth_path": ""},
                 hole,
                 started,
@@ -1256,7 +1256,7 @@ class FlowController:
             "pose": target,
             "task": str(task),
             "plc_xy": xy_targets,
-            "plc_pose": {"x": xy_targets["X"], "y": xy_targets["Y"], "z": FIELD_CAMERA_Z_MM, "r": float(held_r_deg if held_r_deg is not None else target.get("yaw_deg", 0.0))},
+            "plc_pose": {"x": xy_targets["X"], "y": xy_targets["Y"], "z": LAB_CAMERA_Z_MM, "r": float(held_r_deg if held_r_deg is not None else target.get("yaw_deg", 0.0))},
             "z_axis_untouched": True,
             "r_axis_untouched": True,
             "motion_completion": completion,
@@ -1335,7 +1335,7 @@ class FlowController:
             p.setdefault("source", "radar_field")
             final_points[str(pid)] = p
         try:
-            lab_space_plan = build_field_space_plan(
+            lab_space_plan = build_lab_space_plan(
                 final_points,
                 corner_ids,
                 board_geometry=self.board_geometry,
@@ -1444,7 +1444,7 @@ class FlowController:
             )
             self.twin.update_truck(
                 corners=deepcopy(preserved_final),
-                board_mode="FIELD_CAMERA_FINAL",
+                board_mode="LAB_CAMERA_FINAL",
                 camera_board_geometry={"decision_source": "lab_camera_world_reused"},
             )
             plan = self.round_data.get("lab_space_plan") or {}
@@ -1478,7 +1478,7 @@ class FlowController:
 
         held_r = self._lab_held_r_deg()
         try:
-            planner = FieldCameraVisitPlanner(self.algorithms.field_camera_transform())
+            planner = LabCameraVisitPlanner(self.algorithms.field_camera_transform())
             targets = planner.build_pair_targets(
                 radar_points,
                 {"x": 0.0, "y": 0.0, "z": 380.0, "r": held_r},
@@ -1682,7 +1682,7 @@ class FlowController:
             camera_result,
             started,
             model_invoked=yolo_invoked,
-            note="现场离线第3步：到位拍照后输出 WORLD 角点",
+            note="实验室第3步：到位拍照后 cam_yolo_lab 直接输出 WORLD 角点",
             status="SUCCESS" if camera_result.get("success") else "FAILED",
         )
 
@@ -1690,14 +1690,14 @@ class FlowController:
         # 单一预览窗口最终只显示当前 P1/P2 的标注结果；P3/P4 若已显示过，
         # 已被 P1/P2 实拍覆盖，不再因汇总结果重复刷新回来。
         show_group_result("P1P2", group_results.get("P1P2") or camera_result)
-        final_points = merge_field_corner_points(radar_points, camera_points)
+        final_points = merge_lab_corner_points(radar_points, camera_points)
         final_corner_ids = [
             pid
             for pid in (radar.get("corner_ids") or ("P1", "P2", "P3", "P4"))
             if pid in final_points
         ]
         try:
-            lab_space_plan = build_field_space_plan(
+            lab_space_plan = build_lab_space_plan(
                 final_points,
                 final_corner_ids,
                 board_geometry=self.board_geometry,
@@ -1765,7 +1765,7 @@ class FlowController:
         geometry = lab_space_plan.get("geometry") or {}
         self.twin.update_truck(
             corners=deepcopy(final_points),
-            board_mode="FIELD_CAMERA_FINAL",
+            board_mode="LAB_CAMERA_FINAL",
             camera_board_geometry={
                 "decision_source": "lab_camera_world_priority",
                 "corner_sources": {pid: point.get("source") for pid, point in final_points.items()},
@@ -1851,7 +1851,7 @@ class FlowController:
         if len(center) != 3:
             raise RuntimeError(f"区域 {region.get('region_id')} 缺少几何中心")
         held_r = self._lab_held_r_deg()
-        planner = FieldCameraVisitPlanner(self.algorithms.field_camera_transform())
+        planner = LabCameraVisitPlanner(self.algorithms.field_camera_transform())
         target = planner.build_world_target(
             center,
             {"x": 0.0, "y": 0.0, "z": 380.0, "r": held_r},
@@ -1989,7 +1989,7 @@ class FlowController:
         )
         started = perf_counter()
         try:
-            result = self.field_box_monitor.analyze_capture(
+            result = self.lab_box_monitor.analyze_capture(
                 capture,
                 region,
                 phase=phase,
@@ -2038,7 +2038,7 @@ class FlowController:
                 "box_count": result.get("box_count"),
             },
         )
-        module_id = "FIELD_DYNAMIC_PRE_PLACE" if phase == "pre_place" else "FIELD_DYNAMIC_POST_PLACE"
+        module_id = "LAB_DYNAMIC_PRE_PLACE" if phase == "pre_place" else "LAB_DYNAMIC_POST_PLACE"
         self._evidence(
             module_id,
             {
@@ -2084,10 +2084,10 @@ class FlowController:
         command = {
             "X": float(origin.get("X", 0.0)),
             "Y": float(origin.get("Y", 0.0)),
-            "Z": FIELD_CAMERA_Z_MM,
+            "Z": LAB_CAMERA_Z_MM,
             "R": held_r,
         }
-        world_pose = FieldCameraVisitPlanner.plc_to_world_pose(command, mapping)
+        world_pose = LabCameraVisitPlanner.plc_to_world_pose(command, mapping)
         moved = self._lab_move_tool_world_and_wait(
             world_pose,
             "LAB_RETURN_ORIGIN",
@@ -2106,7 +2106,7 @@ class FlowController:
     def _lab_pre_place_monitor(self) -> dict[str, Any]:
         """下一件货物放置前，复查上一件货物所在 B 区。"""
         try:
-            previous_region = field_b_region_for_round(self.space.snapshot(), self.round_index - 1)
+            previous_region = lab_b_region_for_round(self.space.snapshot(), self.round_index - 1)
         except Exception:
             if self._is_offline_field_test():
                 previous_region = self._offline_dummy_b_region()
@@ -2161,7 +2161,7 @@ class FlowController:
                 occupied=snapshot["occupied"],
                 available=snapshot["available"],
                 remaining_space={
-                    "available_b_regions": [item["region_id"] for item in field_b_regions(snapshot) if item.get("status") == "AVAILABLE"],
+                    "available_b_regions": [item["region_id"] for item in lab_b_regions(snapshot) if item.get("status") == "AVAILABLE"],
                 },
             )
         self.round_data["lab_place_verify"] = result
@@ -2223,7 +2223,7 @@ class FlowController:
                 "final_world_corners": deepcopy(preserved_final),
                 "message": "复用首轮相机最终角点与 B 列规划，不重复雷达/角点扫描",
             }
-        b_regions = field_b_regions(self.space.snapshot())
+        b_regions = lab_b_regions(self.space.snapshot())
         if self.round_index >= len(self.queue) or self.round_index >= len(b_regions):
             self.finished = True
             self.running = False
