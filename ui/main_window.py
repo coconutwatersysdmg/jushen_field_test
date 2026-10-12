@@ -455,7 +455,7 @@ class MainWindow(QMainWindow):
         cam_l.addWidget(cam_unit,1)
         lab_rl.addWidget(cam_card,3)
 
-        radar_card,radar_l,_=self._collapsible_card("角点 WORLD（相机优先 / 雷达兜底）",expanded=True)
+        radar_card,radar_l,_=self._collapsible_card("角点 WORLD",expanded=True)
         self.lab_radar_table=QTableWidget(0,5)
         self.lab_radar_table.setHorizontalHeaderLabels(["角点","X","Y","Z","来源"])
         self.lab_radar_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
