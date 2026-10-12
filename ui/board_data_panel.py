@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from services.board_data_service import build_board_data
+from services.board_data_service import build_board_data, build_corner_comparison
+from services.sensor_calibration_service import SensorCalibrationService
 
 
 METRICS = (
@@ -63,11 +64,18 @@ FORMULA_DETAILS: Dict[str, Dict[str, str]] = {
 class BoardDataPanel(QWidget):
     """Read-only comparison of radar board and camera loading-area metrics."""
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, lidar_world_matrix: Any = None):
         super().__init__(parent)
         self.setObjectName("boardDataPanel")
+        if lidar_world_matrix is None:
+            try:
+                lidar_world_matrix = SensorCalibrationService().fixed_world_matrix("lidar")
+            except (FileNotFoundError, KeyError, TypeError, ValueError):
+                lidar_world_matrix = None
+        self._lidar_world_matrix = lidar_world_matrix
         self.board_tables: list[QTableWidget] = []
         self.board_title_labels: list[QLabel] = []
+        self.corner_table: QTableWidget
         self._formula_dialogs: list[QDialog] = []
         self.active_formula_dialog: QDialog | None = None
         self._build()
@@ -104,7 +112,11 @@ class BoardDataPanel(QWidget):
             card_layout.addWidget(table)
             layout.addWidget(card, 0)
 
-        layout.addStretch(0)
+        corner_title = QLabel("角点坐标对照（固定桁架 WORLD 坐标系）")
+        corner_title.setObjectName("boardDataCardTitle")
+        layout.addWidget(corner_title)
+        self.corner_table = self._create_corner_table()
+        layout.addWidget(self.corner_table, 1)
         self.setStyleSheet(
             "#boardDataPageTitle { font-size: 18px; font-weight: 700; color: #123d6a; }"
             "#boardDataCard { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 4px; }"
@@ -145,6 +157,29 @@ class BoardDataPanel(QWidget):
                 table.setItem(row, column, item)
         return table
 
+    def _create_corner_table(self) -> QTableWidget:
+        table = QTableWidget(0, 7)
+        table.setObjectName("boardCornerComparisonTable")
+        table.setHorizontalHeaderLabels([
+            "角点",
+            "雷达 X(mm)", "雷达 Y(mm)", "雷达 Z(mm)",
+            "相机 X(mm)", "相机 Y(mm)", "相机 Z(mm)",
+        ])
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setDefaultSectionSize(34)
+        table.setAlternatingRowColors(True)
+        table.setShowGrid(True)
+        table.setWordWrap(False)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        for section in range(1, 7):
+            header.setSectionResizeMode(section, QHeaderView.ResizeMode.Stretch)
+        return table
+
     def _on_metric_header_clicked(self, section: int) -> None:
         if 1 <= int(section) <= len(METRICS):
             self.open_formula(METRICS[int(section) - 1][2])
@@ -162,7 +197,7 @@ class BoardDataPanel(QWidget):
         return f"{number:.3f} mm"
 
     def update_from_round_data(self, round_data: Mapping[str, Any]) -> None:
-        boards = build_board_data(round_data)
+        boards = build_board_data(round_data, self._lidar_world_matrix)
         for board_index, table in enumerate(self.board_tables):
             board = boards[board_index]
             for row, source_key in enumerate(("radar", "camera")):
@@ -170,6 +205,20 @@ class BoardDataPanel(QWidget):
                 for column, (metric_key, _label, _formula_key) in enumerate(METRICS, start=1):
                     value = metrics.get(metric_key) if isinstance(metrics, Mapping) else None
                     table.item(row, column).setText(self._format_value(metric_key, value))
+
+        corners = build_corner_comparison(round_data, self._lidar_world_matrix)
+        self.corner_table.setRowCount(len(corners))
+        for row, corner in enumerate(corners):
+            values = [corner.get("point_id")]
+            for source_key in ("radar", "camera"):
+                point = corner.get(source_key)
+                for axis in ("x", "y", "z"):
+                    value = point.get(axis) if isinstance(point, Mapping) else None
+                    values.append("—" if value is None else f"{float(value):.3f}")
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.corner_table.setItem(row, column, item)
 
     def open_formula(self, metric_key: str) -> QDialog:
         detail = FORMULA_DETAILS[metric_key]
@@ -182,7 +231,7 @@ class BoardDataPanel(QWidget):
         dialog_layout.setContentsMargins(18, 16, 18, 14)
         dialog_layout.setSpacing(12)
 
-        applies = QLabel("适用于：雷达车板数据、相机装载区域数据（均使用 WORLD 三维坐标）")
+        applies = QLabel("适用于：雷达车板数据、相机装载区域数据（均使用固定桁架 WORLD 坐标）")
         applies.setWordWrap(True)
         applies.setObjectName("mutedLabel")
         dialog_layout.addWidget(applies)

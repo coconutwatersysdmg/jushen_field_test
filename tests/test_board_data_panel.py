@@ -12,12 +12,19 @@ from ui.board_data_panel import BoardDataPanel
 
 
 class BoardDataPanelTests(unittest.TestCase):
+    LIDAR_TO_FIXED_WORLD = [
+        [1.0, 0.0, 0.0, 100.0],
+        [0.0, 1.0, 0.0, 200.0],
+        [0.0, 0.0, 1.0, 300.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.panel = BoardDataPanel()
+        self.panel = BoardDataPanel(lidar_world_matrix=self.LIDAR_TO_FIXED_WORLD)
         self.panel.show()
         self.app.processEvents()
 
@@ -105,7 +112,48 @@ class BoardDataPanelTests(unittest.TestCase):
             dialog_text = "\n".join(label.text() for label in dialog.findChildren(QLabel))
             self.assertIn(formula, dialog_text)
             self.assertIn(explanation, dialog_text)
+            self.assertIn("固定桁架 WORLD 坐标", dialog_text)
             dialog.close()
+
+    def test_corner_table_compares_actual_radar_and_camera_points_in_fixed_world(self):
+        round_data = {
+            "radar_result": {
+                "coordinate_frame": "radar_world",
+                "world_points": {
+                    "P1": [1, 2, 3],
+                    "P2": [4, 5, 6],
+                    "P3": [7, 8, 9],
+                    "P4": [10, 11, 12],
+                },
+            },
+            "camera_world_corners": {
+                "P1": [101.5, 202.5, 303.5],
+                "P2": [104.5, 205.5, 306.5],
+                "P3": [107.5, 208.5, 309.5],
+            },
+        }
+
+        self.panel.update_from_round_data(round_data)
+
+        table = self.panel.corner_table
+        self.assertEqual(table.rowCount(), 4)
+        self.assertEqual(table.columnCount(), 7)
+        self.assertEqual(
+            [table.horizontalHeaderItem(column).text() for column in range(7)],
+            ["角点", "雷达 X(mm)", "雷达 Y(mm)", "雷达 Z(mm)", "相机 X(mm)", "相机 Y(mm)", "相机 Z(mm)"],
+        )
+        self.assertEqual(table.item(0, 0).text(), "P1")
+        self.assertEqual([table.item(0, column).text() for column in range(1, 4)], ["101.000", "202.000", "303.000"])
+        self.assertEqual([table.item(0, column).text() for column in range(4, 7)], ["101.500", "202.500", "303.500"])
+        self.assertEqual([table.item(3, column).text() for column in range(4, 7)], ["—", "—", "—"])
+
+    def test_corner_table_has_no_reserved_empty_rows_and_caps_points_at_p8(self):
+        camera = {f"P{index}": [index, index + 10, index + 20] for index in range(1, 10)}
+
+        self.panel.update_from_round_data({"camera_world_corners": camera})
+
+        self.assertEqual(self.panel.corner_table.rowCount(), 8)
+        self.assertEqual(self.panel.corner_table.item(7, 0).text(), "P8")
 
 
 if __name__ == "__main__":

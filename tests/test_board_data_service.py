@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import math
 import unittest
+from copy import deepcopy
 
 from services.board_data_service import (
     build_board_data,
+    build_corner_comparison,
     camera_corner_groups,
     compute_corner_metrics,
 )
@@ -16,6 +18,13 @@ def point(x, y, z):
 
 
 class BoardDataServiceTests(unittest.TestCase):
+    LIDAR_TO_FIXED_WORLD = [
+        [0.0, -1.0, 0.0, 100.0],
+        [1.0, 0.0, 0.0, 200.0],
+        [0.0, 0.0, 1.0, 300.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
     def test_compute_corner_metrics_uses_three_dimensional_edges(self):
         metrics = compute_corner_metrics([
             point(0, 0, 100),
@@ -156,6 +165,95 @@ class BoardDataServiceTests(unittest.TestCase):
         self.assertEqual(boards[0]["radar"]["length_mm"], 6000.0)
         self.assertIsNone(boards[0]["camera"])
         self.assertIsNone(boards[1]["radar"])
+
+    def test_radar_metrics_are_recomputed_after_fixed_world_transform(self):
+        raw_board = {
+            "corner_ids": ["P1", "P2", "P3", "P4"],
+            "world_points": {
+                "P1": point(0, 0, 10),
+                "P2": point(2000, 0, 10),
+                "P3": point(0, -4000, 110),
+                "P4": point(2000, -4000, 110),
+            },
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mean_mm": 1,
+            "tilt_angle_deg": 1,
+            "offset_angle_deg": 1,
+        }
+        round_data = {
+            "radar_result": {
+                "coordinate_frame": "world",
+                "boards": [],
+                "raw_radar_reference": {"boards": [raw_board]},
+            }
+        }
+
+        boards = build_board_data(round_data, self.LIDAR_TO_FIXED_WORLD)
+
+        radar = boards[0]["radar"]
+        self.assertAlmostEqual(radar["length_mm"], math.sqrt(4000**2 + 100**2), places=6)
+        self.assertAlmostEqual(radar["width_mm"], 2000.0, places=6)
+        self.assertAlmostEqual(radar["height_mean_mm"], 360.0, places=6)
+        self.assertAlmostEqual(radar["tilt_angle_deg"], 1.4320961842, places=6)
+        self.assertAlmostEqual(radar["offset_angle_deg"], 90.0, places=6)
+
+    def test_corner_comparison_shows_actual_union_in_fixed_world_without_mutation(self):
+        round_data = {
+            "radar_result": {
+                "coordinate_frame": "world",
+                "world_points": {"P1": point(999, 999, 999)},
+                "raw_radar_reference": {
+                    "boards": [{
+                        "corner_ids": ["P1", "P2", "P3", "P4"],
+                        "corners_xyz_mm": [
+                            [0, 0, 10], [2000, 0, 10],
+                            [0, -4000, 110], [2000, -4000, 110],
+                        ],
+                    }]
+                },
+            },
+            "camera_world_corners": {
+                "P1": point(101, 201, 311),
+                "P2": point(102, 202, 312),
+                "P3": point(103, 203, 313),
+                "P9": point(109, 209, 319),
+            },
+        }
+        original = deepcopy(round_data)
+
+        rows = build_corner_comparison(round_data, self.LIDAR_TO_FIXED_WORLD)
+
+        self.assertEqual([row["point_id"] for row in rows], ["P1", "P2", "P3", "P4"])
+        self.assertEqual(rows[0]["radar"], {"x": 100.0, "y": 200.0, "z": 310.0})
+        self.assertEqual(rows[0]["camera"], {"x": 101.0, "y": 201.0, "z": 311.0})
+        self.assertIsNone(rows[3]["camera"])
+        self.assertEqual(round_data, original)
+
+    def test_native_radar_points_are_not_exposed_when_transform_is_unavailable(self):
+        round_data = {
+            "radar_result": {
+                "coordinate_frame": "radar_world",
+                "world_points": {"P1": point(1, 2, 3)},
+            }
+        }
+
+        rows = build_corner_comparison(round_data, None)
+
+        self.assertEqual(rows, [])
+
+    def test_six_fixed_world_radar_points_keep_all_original_point_ids(self):
+        radar = {f"P{index}": point(index, -index, 100 + index) for index in range(1, 7)}
+
+        rows = build_corner_comparison({
+            "radar_result": {
+                "coordinate_frame": "world",
+                "world_points": radar,
+            }
+        })
+
+        self.assertEqual([row["point_id"] for row in rows], ["P1", "P2", "P3", "P4", "P5", "P6"])
+        self.assertEqual(rows[4]["radar"], {"x": 5.0, "y": -5.0, "z": 105.0})
 
 
 if __name__ == "__main__":
