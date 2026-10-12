@@ -50,7 +50,7 @@ def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[
     if out.get("pallet_depth"):
         depths["pallet_hole"] = out["pallet_depth"]
 
-    # 第4步：放货检测离线图 → mock 相机 tag（不再走实验室真机拍照）
+    # 第4步：放货检测离线图 → mock 相机 tag（不连接实时相机）
     place_rgb = ""
     place_depth = ""
     raw_place = str(cfg.get("place_verify_dir") or "").strip()

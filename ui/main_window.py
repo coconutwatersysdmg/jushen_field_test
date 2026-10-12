@@ -21,12 +21,6 @@ from ui.debug_dialog import DebugInputDialog
 from ui.corner_review_dialog import run_corner_review
 from ui.plc_motion_dialog import PlcMotionDialog, open_plc_manual_console
 from ui.theme import is_light_theme, twin_clear_color
-from config.feature_switches import (
-    apply_run_profile,
-    get_run_profile,
-    list_run_profiles,
-)
-import config.feature_switches as feature_switches
 
 PROJECT_ROOT=Path(__file__).resolve().parents[1]
 QML_FILE=PROJECT_ROOT/"ui"/"qml"/"TwinScene.qml"
@@ -72,7 +66,6 @@ class MainWindow(QMainWindow):
         self._step_busy=False
         self._lab_auto_waiting_for_manual_place=False
         self._running_stage=0  # 正在执行的流程格编号；与 step_code（可能已前进到下一步）区分
-        self._profile_changing=False
         self._latest_plc_cmd=None
         self._plc_cmd_queue=[]
         self._latest_plc_batch=[]
@@ -151,17 +144,9 @@ class MainWindow(QMainWindow):
         ops_l=QHBoxLayout(ops); ops_l.setContentsMargins(8,6,8,6); ops_l.setSpacing(8)
         mode_label=QLabel("模式"); mode_label.setObjectName("clusterLabel")
         ops_l.addWidget(mode_label,0)
-        self.profile_combo=QComboBox(); self.profile_combo.setMinimumWidth(110); self.profile_combo.setObjectName("modeCombo")
-        for item in list_run_profiles():
-            self.profile_combo.addItem(f"{item['title']}", item["id"])
-            idx=self.profile_combo.count()-1
-            self.profile_combo.setItemData(idx, item.get("subtitle") or "", Qt.ItemDataRole.ToolTipRole)
-        current=str(feature_switches.RUN_PROFILE or "field")
-        found=self.profile_combo.findData(current)
-        if found>=0: self.profile_combo.setCurrentIndex(found)
-        self.profile_combo.currentIndexChanged.connect(self._on_run_profile_changed)
-        self._sync_profile_combo_tooltip()
-        ops_l.addWidget(self.profile_combo,0)
+        fixed_mode=QLabel("现场离线联调"); fixed_mode.setObjectName("modeLabel")
+        fixed_mode.setToolTip("固定运行模式：读取现场离线文件并调用现场算法")
+        ops_l.addWidget(fixed_mode,0)
         phase_cap=QLabel("阶段"); phase_cap.setObjectName("clusterLabel"); ops_l.addWidget(phase_cap,0)
         self.phase=QLabel("IDLE"); self.phase.setObjectName("phaseLabel"); ops_l.addWidget(self.phase,1)
         self.progress=QLabel("0 / 0"); self.progress.setObjectName("progressLabel"); ops_l.addWidget(self.progress,0)
@@ -181,13 +166,13 @@ class MainWindow(QMainWindow):
             l.addLayout(row)
         lay.addWidget(f,0)
 
-        lab_flow,lab_flow_l,self.lab_flow_toggle=self._collapsible_card("实验室流程",expanded=True)
+        lab_flow,lab_flow_l,self.lab_flow_toggle=self._collapsible_card("现场离线流程",expanded=True)
         self.lab_flow_card=lab_flow
         self.lab_flow_nodes=[]
         lab_row=QHBoxLayout(); lab_row.setSpacing(3)
         for index,(number,title_text) in enumerate(self.LAB_FLOW_STAGES):
             node=QLabel(f"{number}. {title_text}"); node.setAlignment(Qt.AlignmentFlag.AlignCenter); node.setWordWrap(True)
-            node.setMinimumHeight(28); node.setToolTip(f"实验室步骤 {number}：{title_text}")
+            node.setMinimumHeight(28); node.setToolTip(f"现场离线步骤 {number}：{title_text}")
             lab_row.addWidget(node,1); self.lab_flow_nodes.append(node)
             if index < len(self.LAB_FLOW_STAGES)-1:
                 arrow=QLabel("›"); arrow.setObjectName("mutedArrow"); arrow.setAlignment(Qt.AlignmentFlag.AlignCenter); lab_row.addWidget(arrow,0)
@@ -426,7 +411,7 @@ class MainWindow(QMainWindow):
         self.right_tabs.addTab(module_page,"模型输入/输出")
         self._module_rows=[]; self._selected_module_id=""; self._latest_module_id=""
 
-        # 实验室右侧：相机照片 + 插孔坐标 + 雷达四角（相机预览/状态/点位合一模块）
+        # 现场离线右侧：相机照片 + 插孔坐标 + 雷达四角（相机预览/状态/点位合一模块）
         self.lab_right_panel=QWidget()
         lab_rl=QVBoxLayout(self.lab_right_panel); lab_rl.setContentsMargins(0,0,0,0); lab_rl.setSpacing(8)
         cam_card,cam_l,_=self._collapsible_card("相机实拍 / 标注结果 / 托盘插孔 WORLD",expanded=True)
@@ -968,80 +953,9 @@ class MainWindow(QMainWindow):
         if not self.controller.queue:
             self.controller.set_plan([{"cargo_code":"CARGO-001","cargo_name":"货物","quantity":3,"length_mm":1200,"width_mm":1000,"height_mm":900,"pallet_reference_width_mm":1200}])
 
-    def _sync_profile_combo_tooltip(self):
-        profile=get_run_profile(self.profile_combo.currentData())
-        tip=f"{profile.get('title')}：{profile.get('subtitle')}"
-        switches=profile.get("switches") or {}
-        tip += (
-            f"\nDEVICE_MODE={switches.get('DEVICE_MODE')}"
-            f"\nLAB_LIDAR={switches.get('USE_LAB_LIDAR_ALGO')}"
-            f"  LAB_CAMERA={switches.get('USE_LAB_CAMERA_ALGO')}"
-            f"\nALLOW_DEMO={switches.get('ALLOW_DEMO_DEVICE_DATA')}"
-            f"  REAL_MOTION={switches.get('ALLOW_REAL_MOTION')}"
-        )
-        self.profile_combo.setToolTip(tip)
-
-    def _on_run_profile_changed(self, _index: int = 0):
-        if self._profile_changing:
-            return
-        profile_id=str(self.profile_combo.currentData() or "field")
-        if profile_id == str(feature_switches.RUN_PROFILE or ""):
-            self._sync_profile_combo_tooltip()
-            return
-        if self.controller.running or self._step_busy or self.timer.isActive():
-            reply=QMessageBox.question(
-                self,
-                "切换运行模式",
-                "当前流程正在运行。切换模式会重置控制器并重建设备连接，是否继续？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                self._profile_changing=True
-                found=self.profile_combo.findData(str(feature_switches.RUN_PROFILE or "field"))
-                if found>=0: self.profile_combo.setCurrentIndex(found)
-                self._profile_changing=False
-                return
-        self._apply_run_profile(profile_id)
-
-    def _apply_run_profile(self, profile_id: str):
-        self.timer.stop()
-        self._step_busy=False
-        old_plan=list(getattr(self.controller, "queue", []) or [])
-        old_debug=deepcopy(getattr(self.controller, "debug_inputs", {}) or self.debug_inputs)
-        applied=apply_run_profile(profile_id, persist=True)
-        self.controller=FlowController()
-        self.controller.set_state_listener(self.motionSnapshot.emit)
-        self.controller.set_plc_command_listener(self.plcCommandReady.emit)
-        self.controller.set_corner_review_callback(self._review_corners)
-        self._plc_cmd_queue.clear()
-        self._latest_plc_cmd=None
-        self._latest_plc_batch=[]
-        if self.plc_dialog is not None:
-            self.plc_dialog.clear_command()
-        self._sync_auto_push_policy()
-        if old_plan:
-            self.controller.set_plan(old_plan)
-        else:
-            self._load_plan()
-        if old_debug:
-            self.debug_inputs=old_debug
-            self.controller.set_debug_inputs(old_debug)
-        else:
-            self.debug_inputs=self.controller.default_debug_inputs()
-        self._sync_profile_combo_tooltip()
-        self.controller.twin.add_message(
-            "RUN_PROFILE",
-            "INFO",
-            f"已切换运行模式：{applied.get('title')}（{applied.get('id')}）",
-            applied.get("switches") or {},
-        )
-        self._apply_ui_mode()
-        self._refresh()
-
     def _is_lab_ui(self) -> bool:
-        """实验室与真实环境共用循环流程 UI；完全模拟仍用旧 12 步界面。"""
-        return str(feature_switches.RUN_PROFILE or "").strip().lower() in {"lab", "field"}
+        """现场离线联调固定使用循环流程 UI。"""
+        return True
 
     def _apply_ui_mode(self) -> None:
         lab = self._is_lab_ui()
@@ -1533,7 +1447,7 @@ class MainWindow(QMainWindow):
         self._update_step_controls()
 
     def _handle_plc_push_failure(self, batch: list, push: dict) -> None:
-        """实验室自动下发失败时复用统一的三选项失败弹窗。"""
+        """现场离线自动下发失败时复用统一的三选项失败弹窗。"""
         action = self._ask_continue_after_failure(
             RuntimeError(str(push.get("message") or "PLC 运动下发失败")),
             code="PLC_PUSH",
@@ -1659,8 +1573,8 @@ class MainWindow(QMainWindow):
 
     def _refresh(self,s=None):
         s=s or self.controller.snapshot(); t=s["twin"]; self.bridge.update_state(t); self._refresh_flow_chain(s)
-        lab = self._is_lab_ui()
-        mode_text = ("实验室首轮建图" if s["first_round"] else "实验室 B 列循环") if lab else ("首轮建图" if s["first_round"] else "循环装载（跳过雷达/角点）")
+        lab = True  # 兼容旧的右侧刷新分支；当前界面固定为现场离线联调
+        mode_text = "现场离线首轮建图" if s["first_round"] else "现场离线 B 区循环"
         self.phase.setText(f"第 {s['round']} 轮 · {mode_text} · {s['step_name']}"); self.progress.setText(f"{s['completed']} / {s['total']}")
         rd=s.get("round_data") or {}; cargo=t.get("cargo") or {}; p=cargo.get("pose") or {}; truck=t.get("truck") or {}; target=truck.get("current_target") or {}; tp=target.get("final_world_pose") or {}; fb=t.get("feedback_compensation_mm") or {}
         hole=((rd.get("pick_result") or {}).get("hole_result") or {})
@@ -1726,7 +1640,7 @@ class MainWindow(QMainWindow):
             cal=s.get("calibration") or {}
             intr="参考/占位" if "PLACEHOLDER" in str(cal.get("intrinsic_parameter_status","")).upper() else str(cal.get("intrinsic_parameter_status","-"))
             extr="占位" if "PLACEHOLDER" in str(cal.get("coordinate_parameter_status","")).upper() else str(cal.get("coordinate_parameter_status","-"))
-            profile=get_run_profile()
+            profile={"title": "现场离线联调", "id": "field"}
             self.cal_label.setText(
                 f"运行模式：{profile.get('title')}（{profile.get('id')}）｜"
                 f"设备：{str(s.get('device_mode') or 'mock').upper()}｜"
@@ -1787,7 +1701,7 @@ class MainWindow(QMainWindow):
             self._render_lab_camera_entry(entries[int(index)], len(entries))
 
     def _refresh_lab_sense_panels(self, s: dict, rd: dict, hole: dict, truck: dict) -> None:
-        """实验室右侧：最新照片+标注图、当前识别点、底板角点。"""
+        """现场离线右侧：最新照片+标注图、当前识别点、底板角点。"""
         latest = s.get("lab_latest_camera_view") or rd.get("lab_latest_camera_view") or {}
         place = rd.get("lab_place_verify") or {}
         pre_monitor = rd.get("lab_pre_place_monitor") or {}
@@ -1885,7 +1799,7 @@ class MainWindow(QMainWindow):
     def _refresh_sensor_panels(self, t: dict, rd: dict, truck: dict):
         """右侧「相机 / 雷达」页：设备参数 + 本轮角点结果。"""
         cameras=t.get("cameras") or {}
-        field_mode=str(feature_switches.RUN_PROFILE or "").strip().lower()=="field"
+        field_mode=True
         cam=((cameras.get("CAM_PALLET") if field_mode else None) or cameras.get("CAM_PICK") or {})
         cam_pose=cam.get("world_pose") or {}
         mount=cam.get("mount_pose") or {}

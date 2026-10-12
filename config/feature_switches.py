@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""功能开关（独立文件，后续新开关也写这里）。
+"""现场离线联调的固定运行配置。
 
-推荐：在软件界面顶部切换「运行模式」，会自动套用下面各组开关。
-也可直接改本文件后重启；界面切换优先于文件默认值（会写入 workdir/ui_run_profile.json）。
+本项目只支持一个运行形态：读取现场离线文件，使用现场算法完成联调。
+设备适配器固定为 Mock，避免启动时误连真实 PLC、雷达或相机。
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict
 
@@ -13,140 +14,50 @@ from typing import Any, Dict
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROFILE_STATE_FILE = PROJECT_ROOT / "workdir" / "ui_run_profile.json"
 
-# ===========================================================================
-# 运行模式（前端三选一；权威入口）
-# ===========================================================================
-# sim   = 完全模拟：不连外设，Mock + 演示数据，现场算法
-# lab   = 实验室：真机适配器 + 实验室雷达/相机算法
-# field = 完全真实：真机适配器 + 现场 PointNet / corner_service
 RUN_PROFILE = "field"
-
-RUN_PROFILES: Dict[str, Dict[str, Any]] = {
-    "sim": {
-        "id": "sim",
-        "title": "完全模拟",
-        "subtitle": "不连外设，本地 Mock 跑通全流程",
-        "switches": {
-            "DEVICE_MODE": "mock",
-            "ALLOW_DEMO_DEVICE_DATA": True,
-            "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": True,
-            "ALLOW_REAL_MOTION": False,
-            "USE_LIVE_LIDAR_CAPTURE": False,
-            "CORNER_REVIEW_ENABLED": True,
-            "CORNER_REVIEW_AUTO_ACCEPT_DEMO": True,
-            "USE_LAB_LIDAR_ALGO": False,
-            "USE_LAB_CAMERA_ALGO": False,
-        },
-    },
-    "lab": {
-        "id": "lab",
-        "title": "实验室",
-        "subtitle": "实验室四步：设备检查→插孔∥雷达→相机精定位→俯拍校验；真机+实验室算法",
-        "switches": {
-            "DEVICE_MODE": "real",
-            "ALLOW_DEMO_DEVICE_DATA": False,
-            "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": True,
-            "ALLOW_REAL_MOTION": True,
-            "USE_LIVE_LIDAR_CAPTURE": True,
-            "CORNER_REVIEW_ENABLED": False,
-            "CORNER_REVIEW_AUTO_ACCEPT_DEMO": False,
-            "USE_LAB_LIDAR_ALGO": True,
-            "USE_LAB_CAMERA_ALGO": True,
-        },
-    },
-    "field": {
-        "id": "field",
-        "title": "现场离线联调",
-        "subtitle": "同款孪生界面；读工控机离线文件 + 现场 PointNet/角点 YOLO（不实时连相机雷达）",
-        "switches": {
-            # mock：不连真机 SDK；用 config/offline_paths.py 注入的文件路径
-            "DEVICE_MODE": "mock",
-            "ALLOW_DEMO_DEVICE_DATA": True,
-            "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": True,
-            "ALLOW_REAL_MOTION": False,
-            "USE_LIVE_LIDAR_CAPTURE": False,
-            "CORNER_REVIEW_ENABLED": True,
-            "CORNER_REVIEW_AUTO_ACCEPT_DEMO": False,
-            "USE_LAB_LIDAR_ALGO": False,
-            "USE_LAB_CAMERA_ALGO": False,
-        },
-    },
-}
-
-# ===========================================================================
-# 1) 设备模式 / Mock 数据（也可被 RUN_PROFILE 覆盖）
-# ===========================================================================
-
 DEVICE_MODE = "mock"
 ALLOW_DEMO_DEVICE_DATA = True
 ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO = True
-
-# ===========================================================================
-# 2) 真机运动 / 雷达实采
-# ===========================================================================
-
 ALLOW_REAL_MOTION = False
 USE_LIVE_LIDAR_CAPTURE = False
-
-# ===========================================================================
-# 3) 角点人工审核
-# ===========================================================================
-
 CORNER_REVIEW_ENABLED = True
 CORNER_REVIEW_AUTO_ACCEPT_DEMO = False
 
-# ===========================================================================
-# 4) 实验室 / 现场 算法切换
-# ===========================================================================
-
-USE_LAB_LIDAR_ALGO = False
-USE_LAB_CAMERA_ALGO = False
+FIELD_PROFILE: Dict[str, Any] = {
+    "id": "field",
+    "title": "现场离线联调",
+    "subtitle": "读取现场离线文件，调用现场 PointNet / 角点 YOLO 完成联调",
+    "switches": {
+        "DEVICE_MODE": DEVICE_MODE,
+        "ALLOW_DEMO_DEVICE_DATA": ALLOW_DEMO_DEVICE_DATA,
+        "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO,
+        "ALLOW_REAL_MOTION": ALLOW_REAL_MOTION,
+        "USE_LIVE_LIDAR_CAPTURE": USE_LIVE_LIDAR_CAPTURE,
+        "CORNER_REVIEW_ENABLED": CORNER_REVIEW_ENABLED,
+        "CORNER_REVIEW_AUTO_ACCEPT_DEMO": CORNER_REVIEW_AUTO_ACCEPT_DEMO,
+    },
+}
 
 
 def list_run_profiles() -> list[dict[str, Any]]:
+    """兼容旧调用方，但只返回现场离线联调。"""
     return [
         {
-            "id": p["id"],
-            "title": p["title"],
-            "subtitle": p["subtitle"],
+            "id": FIELD_PROFILE["id"],
+            "title": FIELD_PROFILE["title"],
+            "subtitle": FIELD_PROFILE["subtitle"],
         }
-        for p in RUN_PROFILES.values()
     ]
 
 
 def get_run_profile(profile_id: str | None = None) -> dict[str, Any]:
-    pid = str(profile_id or RUN_PROFILE or "field").strip().lower()
-    if pid not in RUN_PROFILES:
-        pid = "field"
-    return dict(RUN_PROFILES[pid])
+    """返回固定现场配置；传入其它模式名时明确拒绝。"""
+    if profile_id not in (None, "", "field"):
+        raise ValueError(f"仅支持现场离线联调模式，收到：{profile_id}")
+    return dict(FIELD_PROFILE)
 
 
-def apply_run_profile(profile_id: str, *, persist: bool = True) -> dict[str, Any]:
-    """套用三模式之一，并同步到本模块与 external_devices 可变字段。"""
-    global RUN_PROFILE
-    global DEVICE_MODE, ALLOW_DEMO_DEVICE_DATA, ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO
-    global ALLOW_REAL_MOTION, USE_LIVE_LIDAR_CAPTURE
-    global CORNER_REVIEW_ENABLED, CORNER_REVIEW_AUTO_ACCEPT_DEMO
-    global USE_LAB_LIDAR_ALGO, USE_LAB_CAMERA_ALGO
-
-    profile = get_run_profile(profile_id)
-    switches = dict(profile.get("switches") or {})
-    RUN_PROFILE = str(profile["id"])
-    DEVICE_MODE = str(switches.get("DEVICE_MODE", DEVICE_MODE))
-    ALLOW_DEMO_DEVICE_DATA = bool(switches.get("ALLOW_DEMO_DEVICE_DATA", ALLOW_DEMO_DEVICE_DATA))
-    ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO = bool(
-        switches.get("ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO", ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO)
-    )
-    ALLOW_REAL_MOTION = bool(switches.get("ALLOW_REAL_MOTION", ALLOW_REAL_MOTION))
-    USE_LIVE_LIDAR_CAPTURE = bool(switches.get("USE_LIVE_LIDAR_CAPTURE", USE_LIVE_LIDAR_CAPTURE))
-    CORNER_REVIEW_ENABLED = bool(switches.get("CORNER_REVIEW_ENABLED", CORNER_REVIEW_ENABLED))
-    CORNER_REVIEW_AUTO_ACCEPT_DEMO = bool(
-        switches.get("CORNER_REVIEW_AUTO_ACCEPT_DEMO", CORNER_REVIEW_AUTO_ACCEPT_DEMO)
-    )
-    USE_LAB_LIDAR_ALGO = bool(switches.get("USE_LAB_LIDAR_ALGO", USE_LAB_LIDAR_ALGO))
-    USE_LAB_CAMERA_ALGO = bool(switches.get("USE_LAB_CAMERA_ALGO", USE_LAB_CAMERA_ALGO))
-
-    # 延迟同步，避免与 external_devices_config 循环导入
+def _sync_external_device_switches() -> None:
     try:
         import sys
 
@@ -160,50 +71,34 @@ def apply_run_profile(profile_id: str, *, persist: bool = True) -> dict[str, Any
     except Exception:
         pass
 
+
+def apply_run_profile(profile_id: str = "field", *, persist: bool = True) -> dict[str, Any]:
+    """应用唯一的现场离线联调配置。"""
+    if str(profile_id or "field").strip().lower() != "field":
+        raise ValueError(f"仅支持现场离线联调模式，收到：{profile_id}")
+
+    _sync_external_device_switches()
     if persist:
         try:
-            import json
-
             PROFILE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
             PROFILE_STATE_FILE.write_text(
-                json.dumps({"run_profile": RUN_PROFILE}, ensure_ascii=False, indent=2),
+                json.dumps({"run_profile": "field"}, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
         except Exception:
             pass
 
     return {
-        "id": RUN_PROFILE,
-        "title": profile["title"],
-        "subtitle": profile["subtitle"],
-        "switches": {
-            "DEVICE_MODE": DEVICE_MODE,
-            "ALLOW_DEMO_DEVICE_DATA": ALLOW_DEMO_DEVICE_DATA,
-            "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO,
-            "ALLOW_REAL_MOTION": ALLOW_REAL_MOTION,
-            "USE_LIVE_LIDAR_CAPTURE": USE_LIVE_LIDAR_CAPTURE,
-            "CORNER_REVIEW_ENABLED": CORNER_REVIEW_ENABLED,
-            "CORNER_REVIEW_AUTO_ACCEPT_DEMO": CORNER_REVIEW_AUTO_ACCEPT_DEMO,
-            "USE_LAB_LIDAR_ALGO": USE_LAB_LIDAR_ALGO,
-            "USE_LAB_CAMERA_ALGO": USE_LAB_CAMERA_ALGO,
-        },
+        "id": "field",
+        "title": FIELD_PROFILE["title"],
+        "subtitle": FIELD_PROFILE["subtitle"],
+        "switches": dict(FIELD_PROFILE["switches"]),
     }
 
 
 def load_persisted_run_profile() -> str:
-    """启动时读取上次界面选择的模式；没有则用本文件 RUN_PROFILE。"""
-    try:
-        if PROFILE_STATE_FILE.is_file():
-            import json
-
-            data = json.loads(PROFILE_STATE_FILE.read_text(encoding="utf-8"))
-            pid = str((data or {}).get("run_profile") or "").strip().lower()
-            if pid in RUN_PROFILES:
-                return pid
-    except Exception:
-        pass
-    return str(RUN_PROFILE or "field")
+    """兼容旧状态文件，但始终固定返回现场离线联调。"""
+    return "field"
 
 
-# 导入时套用默认/上次模式（不依赖 external_devices_config）
-apply_run_profile(load_persisted_run_profile(), persist=False)
+apply_run_profile("field", persist=False)

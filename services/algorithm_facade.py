@@ -2,12 +2,10 @@
 from __future__ import annotations
 from copy import deepcopy
 
-import config.feature_switches as feature_switches
 from services.pallet_hole_recognition_service import PalletHoleRecognitionService
 from services.pallet_cargo_offset_service import PalletCargoOffsetService
 from services.point_cloud_processing_service import PointCloudProcessingService
 from services.corner_recognition_service import CornerRecognitionService
-from services.lab_lidar_adapter import process_lab_lidar_pcd
 from services.lab_camera_adapter import LabCameraCornerService
 from services.traditional_fork_hole_service import TraditionalForkHoleService
 
@@ -18,20 +16,20 @@ class AlgorithmFacade:
     注意：雷达 point_cloud 的 board_mode / loading_plan 不再作为最终装载规划依据；
     它们即使由旧模块返回，也只保存在原始结果中。最终板型和区域由相机 WORLD 角点计算。
 
-    实验室/现场算法由 config.feature_switches 两个独立开关控制。
+    现场离线算法固定使用 PointNet 点云处理、角点识别和传统 RGB-D 插孔识别。
     """
     def __init__(self):
         self.pallet_hole = PalletHoleRecognitionService()
         self.offset = PalletCargoOffsetService()
         self.point_cloud = PointCloudProcessingService()
         self.corner = CornerRecognitionService()
-        self._lab_camera: LabCameraCornerService | None = None
+        self._camera_transform: LabCameraCornerService | None = None
         self._traditional_fork_hole: TraditionalForkHoleService | None = None
 
-    def _lab_camera_service(self) -> LabCameraCornerService:
-        if self._lab_camera is None:
-            self._lab_camera = LabCameraCornerService()
-        return self._lab_camera
+    def _field_camera_transform_service(self) -> LabCameraCornerService:
+        if self._camera_transform is None:
+            self._camera_transform = LabCameraCornerService()
+        return self._camera_transform
 
     def _traditional_fork_hole_service(self) -> TraditionalForkHoleService:
         if self._traditional_fork_hole is None:
@@ -49,17 +47,6 @@ class AlgorithmFacade:
 
     def radar_process(self, locate_result: dict, cargo: dict):
         if locate_result.get("pcd_path"):
-            if feature_switches.USE_LAB_LIDAR_ALGO:
-                result = process_lab_lidar_pcd(
-                    locate_result["pcd_path"],
-                    result_tag=cargo.get("instance_id", "cargo"),
-                )
-                result["radar_raw_board_analysis_reference_only"] = {
-                    "board_mode": "lab_flat_4_corners",
-                    "length_mm": result.get("length_mm"),
-                    "width_mm": result.get("width_mm"),
-                }
-                return result
             result = self.point_cloud.process_file(locate_result["pcd_path"], result_tag=cargo.get("instance_id", "cargo"))
             result["radar_raw_board_analysis_reference_only"] = {
                 "board_mode": result.get("board_mode"),
@@ -76,27 +63,10 @@ class AlgorithmFacade:
             result_tag=cargo.get("instance_id", "cargo"),
         )
 
-    def lab_corner_world_recognize(
-        self,
-        corner_ids: list[str],
-        capture_meta: dict,
-        group_captures: dict | None = None,
-    ):
-        """实验室相机：YOLO+深度+外参，直接输出 WORLD。"""
-        return self._lab_camera_service().locate_from_capture_meta(
-            corner_ids=corner_ids,
-            capture_meta=capture_meta,
-            group_captures=group_captures,
-        )
-
-    def lab_pallet_hole_recognize(self, capture: dict, cargo: dict):
-        """实验室插孔：传统 OpenCV 算法，输出相机坐标系 XYZ(mm)。"""
+    def field_pallet_hole_recognize(self, capture: dict, cargo: dict):
+        """现场离线插孔识别：传统 OpenCV RGB-D，输出相机坐标系 XYZ(mm)。"""
         return self._traditional_fork_hole_service().recognize_capture(capture)
 
-    def lab_pallet_hole_world_recognize(self, capture: dict, plc_pose: dict, cargo: dict):
-        """兼容旧接口：实验室插孔已改为传统算法，世界坐标由流程侧转换。"""
-        return self.lab_pallet_hole_recognize(capture, cargo)
-
-    def lab_camera_transform(self):
-        """Return the lab-only camera/PLC/WORLD transform used by visit planning."""
-        return self._lab_camera_service().transform
+    def field_camera_transform(self):
+        """返回现场离线 RGB-D 相机到 WORLD 的标定变换。"""
+        return self._field_camera_transform_service().transform

@@ -152,12 +152,12 @@ class LabCameraVisitPlanner:
         elif isinstance(raw, Sequence) and not isinstance(raw, (str, bytes)):
             values = tuple(raw[:3])
         else:
-            raise ValueError(f"缺少实验室雷达 WORLD 点 {name}")
+            raise ValueError(f"缺少现场离线雷达 WORLD 点 {name}")
         if len(values) != 3 or any(value is None for value in values):
-            raise ValueError(f"实验室雷达 WORLD 点 {name} 无效")
+            raise ValueError(f"现场离线雷达 WORLD 点 {name} 无效")
         point = tuple(float(value) for value in values)
         if not all(math.isfinite(value) for value in point):
-            raise ValueError(f"实验室雷达 WORLD 点 {name} 无效")
+            raise ValueError(f"现场离线雷达 WORLD 点 {name} 无效")
         return point
 
 

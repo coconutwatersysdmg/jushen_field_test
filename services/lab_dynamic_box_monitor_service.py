@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""实验室纸箱四角 WORLD 区域判定的纯几何核心。"""
+"""现场离线纸箱四角 WORLD 区域判定的纯几何核心。"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -134,7 +134,7 @@ def evaluate_selected_box_world(
 
 
 class LabDynamicBoxMonitorService:
-    """接入用户 dynamic_monitor_lab：RGB 找箱角，Depth+外参转 WORLD 后判区。"""
+    """接入现场动态监测：RGB 找箱角，Depth+外参转 WORLD 后判区。"""
 
     def __init__(
         self,

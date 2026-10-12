@@ -7,7 +7,7 @@
   - ALLOW_REAL_MOTION
   - USE_LIVE_LIDAR_CAPTURE
   - ALLOW_DEMO_DEVICE_DATA
-  - 实验室算法开关等
+  - 现场离线联调固定使用 Mock 设备与现场双相机布局
 """
 from __future__ import annotations
 
@@ -33,7 +33,6 @@ from config.feature_switches import (
 # 传感器经现场交换机进局域网；笔记本用工程师调试 IP（同网段），不要网线对插相机。
 # 切换产线只改 FIELD_LINE_ID = 1 / 2 / 3
 FIELD_LINE_ID = 1
-LAB_PLC_IP = "192.168.6.6"  # 实验室龙门 PLC（lab 模式用）
 FIELD_SITE_BY_LINE: Dict[int, Dict[str, Any]] = {
     1: {
         "net": "10.11.206.0",
@@ -71,12 +70,8 @@ def get_field_site(line_id: int | None = None) -> Dict[str, Any]:
 
 
 def resolve_plc_ip() -> str:
-    """lab 用实验室 PLC；field/sim 默认用当前产线现场 PLC。"""
-    import config.feature_switches as fs
-
-    if str(fs.RUN_PROFILE or "").lower() == "lab":
-        return str(LAB_PLC_IP)
-    return str(get_field_site().get("plc_ip") or LAB_PLC_IP)
+    """返回当前现场产线 PLC 地址；流程不会主动连接真实 PLC。"""
+    return str(get_field_site().get("plc_ip") or "")
 
 
 # ---- PLC（Modbus TCP）---- 对应 gantry_settings.json
@@ -281,53 +276,46 @@ DEVICE_LAYOUT: Dict[str, Any] = {
 
 def get_device_layout_config() -> Dict[str, Any]:
     layout = deepcopy(DEVICE_LAYOUT)
-    try:
-        import config.feature_switches as fs
-
-        profile = str(fs.RUN_PROFILE or "").strip().lower()
-    except Exception:
-        profile = ""
-    if profile == "field":
-        # 现场：海康拍车板角点，梅卡拍托盘（插孔/规格）
-        layout["cameras"] = {
-            "CAM_CORNER": {
-                "calibration_name": "corner_camera",
-                "parent_robot_id": "PICK_ARM",
-                "sensor": "RGB",
-                "role": "车板角点识别（海康 MV-DLS300P-04T）",
-                "mount_pose": {
-                    "x_mm": 0,
-                    "y_mm": 0,
-                    "z_mm": 0,
-                    "roll_deg": 0,
-                    "pitch_deg": 0,
-                    "yaw_deg": 0,
-                },
+    # 现场：海康拍车板角点，梅卡拍托盘（插孔/规格）
+    layout["cameras"] = {
+        "CAM_CORNER": {
+            "calibration_name": "corner_camera",
+            "parent_robot_id": "PICK_ARM",
+            "sensor": "RGB",
+            "role": "车板角点识别（海康 MV-DLS300P-04T）",
+            "mount_pose": {
+                "x_mm": 0,
+                "y_mm": 0,
+                "z_mm": 0,
+                "roll_deg": 0,
+                "pitch_deg": 0,
+                "yaw_deg": 0,
             },
-            "CAM_PALLET": {
-                "calibration_name": "hole_camera",
-                "parent_robot_id": "PICK_ARM",
-                "sensor": "RGB-D",
-                "role": "托盘插孔/规格（梅卡 Eye Deep-V4D3000A）",
-                "mount_pose": {
-                    "x_mm": 250,
-                    "y_mm": 0,
-                    "z_mm": -80,
-                    "roll_deg": 0,
-                    "pitch_deg": 0,
-                    "yaw_deg": 180,
-                },
-                "plc_reference_r_deg": -80.0,
+        },
+        "CAM_PALLET": {
+            "calibration_name": "hole_camera",
+            "parent_robot_id": "PICK_ARM",
+            "sensor": "RGB-D",
+            "role": "托盘插孔/规格（梅卡 Eye Deep-V4D3000A）",
+            "mount_pose": {
+                "x_mm": 250,
+                "y_mm": 0,
+                "z_mm": -80,
+                "roll_deg": 0,
+                "pitch_deg": 0,
+                "yaw_deg": 180,
             },
-        }
-        layout["camera_roles"] = {
-            "pallet_hole": "CAM_PALLET",
-            "pre_pick_offset": "CAM_PALLET",
-            "corner": "CAM_CORNER",
-            "observe": "CAM_PALLET",
-            "neighbor": "CAM_PALLET",
-            "post": "CAM_PALLET",
-        }
+            "plc_reference_r_deg": -80.0,
+        },
+    }
+    layout["camera_roles"] = {
+        "pallet_hole": "CAM_PALLET",
+        "pre_pick_offset": "CAM_PALLET",
+        "corner": "CAM_CORNER",
+        "observe": "CAM_PALLET",
+        "neighbor": "CAM_PALLET",
+        "post": "CAM_PALLET",
+    }
     return layout
 
 

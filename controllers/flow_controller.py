@@ -21,11 +21,7 @@ from services.lab_space_planner import (
     lab_b_region_for_round,
     lab_b_regions,
 )
-from services.lab_cycle_policy import (
-    LAB_FIRST_STEPS as LAB_POLICY_FIRST_STEPS,
-    LAB_REPEAT_STEPS as LAB_POLICY_REPEAT_STEPS,
-    cycle_steps_for_round,
-)
+from services.field_cycle_policy import field_steps_for_round
 from services.board_spec_utils import (
     board_extent_from_corners,
     board_extent_from_geometry,
@@ -59,65 +55,11 @@ GANTRY_CLEARANCE_Z_MM = 4800.0
 
 
 class FlowController:
-    """v8 首轮建图 + 后续循环装载控制器。
-
-    首轮：2 -> 3(并行3.1/3.2) -> 4 -> 5 -> 6 -> 7 -> 8.1 -> 8.2 -> 8.3 -> 9 -> 10.1 -> 10.2 -> 11 -> 12
-    后续：2 -> 3.1 -> 8.2 -> 8.3 -> 9 -> 10.1 -> 10.2 -> 11 -> 12
-
-    8.3 是根据用户“下一轮包含8.3”的描述明确出来的目标锁定节点：
-    它不重新建图，只把持久可用空间、历史反馈与8.2临近托盘补偿合成为本轮最终目标。
-    """
-
-    FIRST_STEPS = [
-        ("DEVICE_CHECK", "1. 外接设备连接检查（PLC / 雷达 / 相机）"),
-        ("PRE_PICK_OFFSET", "2. 货物-托盘偏差分析 / S-F message"),
-        ("PARALLEL_LOCATE", "3. 并行：3.1插孔插取 + 3.2雷达找车"),
-        ("RADAR_TO_CAMERA", "4. 雷达粗点 -> PLC -> 机械臂挂载相机"),
-        ("CAPTURE_CORNERS", "5. 左外侧单次通过：车尾/车头各1组 RGB-D"),
-        ("CORNER_RECOGNITION", "6. 角点 .pt 像素识别 / 人工审核矫正"),
-        ("CAMERA_TO_WORLD", "7. 像素+深度+动态外参 -> WORLD"),
-        ("INITIAL_SPACE_PLAN", "8.1 相机判断平/高低板 + 两列×1.2m盲码规划"),
-        ("NEIGHBOR_POSE", "8.2 拍临近托盘姿态 / 计算当前补偿"),
-        ("TARGET_CONFIRM", "8.3 可用空间状态确认 / 锁定本轮目标"),
-        ("PRE_PLACE_MONITOR", "8.4 放置前 RGB-D 动态监测"),
-        ("PLACE", "9. 计算最终放置点 / PLC / 放货"),
-        ("POST_PLACE_BOTTOM", "10.0 放置后底层托盘 RGB-D 检测"),
-        ("POST_REGION", "10.1 托盘-车板区域偏差 + 货物两面观测"),
-        ("POST_CARGO_OFFSET", "10.2 托盘-货物偏差 / 补偿"),
-        ("FEEDBACK", "11. 偏差回PLC / 修正下一托盘 / 更新空间"),
-        ("RETURN", "12. 机械臂返回 / 下一轮"),
-    ]
-    REPEAT_STEPS = [
-        ("PRE_PICK_OFFSET", "2. 货物-托盘偏差分析 / S-F message"),
-        ("PICK_ONLY", "3.1 机械臂找插孔并插取（跳过雷达）"),
-        ("NEIGHBOR_POSE", "8.2 拍临近托盘姿态 / 计算当前补偿"),
-        ("TARGET_CONFIRM", "8.3 复用首轮车板模型 / 锁定下一可用区域"),
-        ("PRE_PLACE_MONITOR", "8.4 放置前 RGB-D 动态监测"),
-        ("PLACE", "9. 计算最终放置点 / PLC / 放货"),
-        ("POST_PLACE_BOTTOM", "10.0 放置后底层托盘 RGB-D 检测"),
-        ("POST_REGION", "10.1 托盘-车板区域偏差 + 货物两面观测"),
-        ("POST_CARGO_OFFSET", "10.2 托盘-货物偏差 / 补偿"),
-        ("FEEDBACK", "11. 偏差回PLC / 修正下一托盘 / 更新空间"),
-        ("RETURN", "12. 机械臂返回 / 下一轮"),
-    ]
-    # 实验室：首轮建图；后续按 B1→B2→…→B5 做返回/插孔/放前监测/放后检测。
-    LAB_FIRST_STEPS = list(LAB_POLICY_FIRST_STEPS)
-    LAB_REPEAT_STEPS = list(LAB_POLICY_REPEAT_STEPS)
-
-    @staticmethod
-    def is_lab_profile() -> bool:
-        return str(feature_switches.RUN_PROFILE or "").strip().lower() == "lab"
-
-    @staticmethod
-    def uses_coord_cycle_flow() -> bool:
-        """实验室与真实环境共用「感知→划格→确认→校验」循环；完全模拟仍用旧 12 步链。"""
-        return str(feature_switches.RUN_PROFILE or "").strip().lower() in {"lab", "field"}
+    """现场离线联调的首轮建图与后续 B 区循环控制器。"""
 
     def _is_offline_field_test(self) -> bool:
-        """现场离线联调：读文件，不走实验室真机拍照/到位。"""
-        if bool((getattr(self, "debug_inputs", None) or {}).get("offline_field_test")):
-            return True
-        return str(feature_switches.RUN_PROFILE or "").strip().lower() == "field"
+        """现场离线联调固定读取文件，不连接实时相机/雷达。"""
+        return True
 
     def _offline_dummy_b_region(self) -> dict[str, Any]:
         return {
@@ -162,12 +104,8 @@ class FlowController:
             self.robot = robot
             self.radar = radar
             self.camera = camera
-        # Real hardware mode must not synthesize demo frames behind the scenes.
-        if str(self.device_mode).lower() == "real":
-            self.allow_demo = False
-        if self.is_lab_profile() and str(self.device_mode).lower() == "real" and hasattr(self.camera, "allow_file_inputs"):
-            # 只约束实验室真机流程；现场模式仍保留原有调试输入能力。
-            self.camera.allow_file_inputs = False
+        if hasattr(self.camera, "allow_file_inputs"):
+            self.camera.allow_file_inputs = True
         if hasattr(self.camera, "set_demo_enabled"):
             self.camera.set_demo_enabled(self.allow_demo)
         self.algorithms = algorithms or AlgorithmFacade()
@@ -312,12 +250,8 @@ class FlowController:
         speed = float(cmd.get("speed") or (GANTRY or {}).get("default_speed") or 30.0)
         timeout_s = float((GANTRY or {}).get("move_timeout_s") or 60.0)
         soft_limits = dict((GANTRY or {}).get("soft_limits") or {})
-        # 循环流程（实验室/真实）自动运动只允许 X/Y；Z/R 现场保持。
-        # 完全模拟仍按原有 hold_r_axis 规则运行。
-        if self.uses_coord_cycle_flow():
-            axes = ("X", "Y")
-        else:
-            axes = ("X", "Y", "Z") if bool(getattr(plc, "hold_r_axis", (GANTRY or {}).get("hold_r_axis", False))) else ("X", "Y", "Z", "R")
+        # 现场离线联调只记录 XY 目标；Z/R 保持现场机械设置。
+        axes = ("X", "Y")
         targets = {axis: float(targets[axis]) for axis in axes}
 
         if hasattr(plc, "move_absolute_xyzr"):
@@ -453,12 +387,10 @@ class FlowController:
     def is_first_round(self): return self.round_index == 0
     @property
     def steps(self):
-        if self.uses_coord_cycle_flow():
-            return list(cycle_steps_for_round(self.round_index))
-        return self.FIRST_STEPS if self.is_first_round else self.REPEAT_STEPS
+        return list(field_steps_for_round(self.round_index))
     @property
     def current_step(self):
-        done_msg = "本轮/全部完成" if self.uses_coord_cycle_flow() else "全部货物装载完成"
+        done_msg = "本轮/全部完成"
         if self.finished:
             return ("DONE", done_msg)
         if self.step_index >= len(self.steps):
@@ -499,8 +431,6 @@ class FlowController:
 
     def set_debug_inputs(self, values: Dict[str, Any]):
         self.debug_inputs=deepcopy(values or {})
-        self._apply_live_radar_policy()
-        self._apply_live_camera_policy()
         if hasattr(self.radar,"set_point_cloud_path"):
             self.radar.set_point_cloud_path(self.debug_inputs.get("point_cloud_path", ""))
         pallet_rgb=self.debug_inputs.get("pallet_rgb", ""); pallet_depth=self.debug_inputs.get("pallet_depth", "")
@@ -516,92 +446,6 @@ class FlowController:
             if hasattr(self.camera,"set_tagged_depth"): self.camera.set_tagged_depth(tag,path)
         for tag,path in (self.debug_inputs.get("depths") or {}).items():
             if hasattr(self.camera,"set_tagged_depth"): self.camera.set_tagged_depth(tag,path)
-        # 真机策略可能清空了部分 tag；再刷一遍，避免上面循环把空路径漏掉。
-        self._reapply_cleared_live_camera_tags()
-
-    def _use_live_radar(self) -> bool:
-        if str(getattr(self, "device_mode", "mock")).lower() != "real":
-            return False
-        livox = (self.system_config.get("devices") or {}).get("livox") or {}
-        return bool(livox.get("use_live_capture", True))
-
-    def _apply_live_radar_policy(self):
-        """真机 + use_live_capture：丢掉所有离线 PCD，强制走 Livox 实采。"""
-        if not self._use_live_radar():
-            return
-        was_live = (
-            self.debug_inputs.get("point_cloud_example_only") is False
-            and not str(self.debug_inputs.get("point_cloud_path") or "").strip()
-        )
-        self.debug_inputs["point_cloud_example_only"] = False
-        self.debug_inputs["point_cloud_path"] = ""
-        if not was_live and not getattr(self, "_live_radar_policy_announced", False):
-            self.twin.add_message(
-                "RADAR",
-                "INFO",
-                "已切换真雷达实采：忽略所有离线 PCD，将调用 Livox Mid360 采集",
-                {"use_live_capture": True, "host_config": "config/external_devices_config.py → LIVOX.host_ip"},
-            )
-        self._live_radar_policy_announced = True
-
-    def _live_camera_force_tags(self) -> tuple[str, ...]:
-        # 实验室 / 真实：这些步骤必须实拍，不允许调试预填示例图短路。
-        return ("pallet_hole", "pre_pick_offset", "lab_pre_place_monitor", "lab_place_verify")
-
-    def _apply_live_camera_policy(self):
-        """真机：第2步等偏移检测丢掉调试预填 JPG，强制走相机实拍。"""
-        if str(getattr(self, "device_mode", "mock")).lower() != "real":
-            return
-        images = self.debug_inputs.setdefault("images", {})
-        depths = self.debug_inputs.setdefault("depths", {})
-        cleared = []
-        if self.is_lab_profile():
-            # 实验室真机测试不保留任何离线相机输入；全部步骤只能使用本轮 D435i 实拍。
-            for bucket_name in ("images", "depths", "corner_images", "corner_depths"):
-                bucket = self.debug_inputs.setdefault(bucket_name, {})
-                for key in list(bucket):
-                    if str(bucket.get(key) or "").strip():
-                        bucket[key] = ""
-                        cleared.append(f"{bucket_name}.{key}")
-            for key in ("pallet_rgb", "pallet_depth"):
-                if str(self.debug_inputs.get(key) or "").strip():
-                    self.debug_inputs[key] = ""
-                    cleared.append(key)
-        for tag in self._live_camera_force_tags():
-            had_offline_input = False
-            if str(images.get(tag) or "").strip():
-                images[tag] = ""
-                had_offline_input = True
-            if str(depths.get(tag) or "").strip():
-                depths[tag] = ""
-                had_offline_input = True
-            if tag == "pallet_hole":
-                if str(self.debug_inputs.get("pallet_rgb") or "").strip():
-                    self.debug_inputs["pallet_rgb"] = ""
-                    had_offline_input = True
-                if str(self.debug_inputs.get("pallet_depth") or "").strip():
-                    self.debug_inputs["pallet_depth"] = ""
-                    had_offline_input = True
-            if had_offline_input:
-                cleared.append(tag)
-        cleared_key = tuple(sorted(set(cleared)))
-        if cleared and cleared_key != getattr(self, "_last_live_camera_cleared_key", ()):
-            self.twin.add_message(
-                "CAMERA",
-                "INFO",
-                "真机模式：已忽略调试示例图，步骤将实拍：" + ", ".join(cleared),
-                {"cleared_tags": cleared, "capture_dir": "workdir/camera_captures"},
-            )
-        self._last_live_camera_cleared_key = cleared_key
-
-    def _reapply_cleared_live_camera_tags(self):
-        if str(getattr(self, "device_mode", "mock")).lower() != "real":
-            return
-        for tag in self._live_camera_force_tags():
-            if hasattr(self.camera, "set_tagged_image"):
-                self.camera.set_tagged_image(tag, "")
-            if hasattr(self.camera, "set_tagged_depth"):
-                self.camera.set_tagged_depth(tag, "")
 
     def default_debug_inputs(self):
         try:
@@ -745,11 +589,6 @@ class FlowController:
     def _capture_rgbd(self, camera_id: str, tag: str):
         cap=self.camera.capture_rgbd(camera_id,tag=tag)
         if not cap.get("success"): raise RuntimeError(f"{camera_id} 未取得 {tag} 的 RGB + 对齐深度")
-        if self.is_lab_profile() and str(getattr(self, "device_mode", "mock")).lower() == "real":
-            if cap.get("demo") or str(cap.get("source") or "").lower() != "realsense_d435i":
-                raise RuntimeError(f"实验室 {tag} 必须由 D435i 实时实拍，已拒绝离线/调试输入")
-            if not cap.get("rgb_path") or not cap.get("depth_path"):
-                raise RuntimeError(f"实验室 {tag} 的 D435i 实拍缺少 RGB 或对齐深度")
         return cap
 
     def _probe_one_device(self, device_id: str, probe_fn, timeout_s: float = 8.0) -> dict:
@@ -774,12 +613,9 @@ class FlowController:
 
     def _camera_ids_for_device_check(self) -> list[str]:
         """现场模式检测海康角点 + 梅卡托盘；其他模式仍检测 CAM_PICK。"""
-        profile = str(feature_switches.RUN_PROFILE or "").strip().lower()
-        if profile == "field":
-            cams = list(((self.device_config.get("cameras") or {}) or {}).keys())
-            ordered = [cid for cid in ("CAM_CORNER", "CAM_PALLET") if cid in cams]
-            return ordered or ["CAM_CORNER", "CAM_PALLET"]
-        return ["CAM_PICK"]
+        cams = list(((self.device_config.get("cameras") or {}) or {}).keys())
+        ordered = [cid for cid in ("CAM_CORNER", "CAM_PALLET") if cid in cams]
+        return ordered or ["CAM_CORNER", "CAM_PALLET"]
 
     def _device_check(self):
         """第1步：检查 PLC / 雷达 / 相机连接。失败只记日志，不阻断下一步。"""
@@ -858,10 +694,7 @@ class FlowController:
     def _pre_pick_offset(self):
         """插取前货-托偏移。真机强制实拍；拍照/识别失败只记日志，不阻断下一步。"""
         cam=self._camera_for_role("pre_pick_offset","CAM_PICK")
-        live=str(getattr(self,"device_mode","mock")).lower()=="real"
-        if live and hasattr(self.camera,"set_tagged_image"):
-            # 再清一次，防止中途又被调试输入写回示例图。
-            self.camera.set_tagged_image("pre_pick_offset","")
+        live=False
 
         result={
             "success":False,
@@ -1054,28 +887,19 @@ class FlowController:
         started=perf_counter(); raw_result=self.algorithms.radar_process(locate,self.current_cargo) if locate.get("success") else locate
         model_invoked=bool(locate.get("pcd_path"))
         # 真雷达实采时禁止再替换成联调粗点
-        example_only=bool(model_invoked and self.debug_inputs.get("point_cloud_example_only") and not self._use_live_radar())
+        example_only=bool(model_invoked and self.debug_inputs.get("point_cloud_example_only"))
         algo_note = (
-            "实验室几何雷达算法"
-            if (model_invoked and feature_switches.USE_LAB_LIDAR_ALGO)
-            else (
-                "离线PCD已完成真实推理；因不属于当前场景标定，仅展示输入输出，不将其坐标发送给机械臂"
-                if example_only
-                else (
-                    "Livox实采点云已处理"
-                    if self._use_live_radar()
-                    else "雷达仅用于相机粗搜索；最终板型由相机角点判断"
-                )
-            )
+            "离线PCD已完成真实推理；因不属于当前场景标定，仅展示输入输出，不将其坐标发送给机械臂"
+            if example_only
+            else "现场离线雷达仅用于相机粗搜索；最终板型由角点判断"
         )
         self._evidence(
             "POINTNET_TRUCK",
             {
                 "pcd_path":locate.get("pcd_path",""),
                 "example_only":example_only,
-                "live_radar":self._use_live_radar(),
+                "live_radar":False,
                 "locate_source":locate.get("source"),
-                "use_lab_lidar_algo":bool(feature_switches.USE_LAB_LIDAR_ALGO),
             },
             raw_result,
             started,
@@ -1109,10 +933,10 @@ class FlowController:
         return result
 
     def _lab_pick_recognize(self):
-        """实验室 2.1：到插孔位拍照识别两孔，发布坐标供 PLC 确认；不做物理插取。"""
+        """现场离线：读取插孔 RGB-D，发布 WORLD 坐标供 PLC 联调确认；不做物理插取。"""
         if self.round_data.get("pick_result", {}).get("success"):
             return self.round_data["pick_result"]
-        self.twin.set_parallel("pick", "RUNNING", "实验室：插孔拍照识别中")
+        self.twin.set_parallel("pick", "RUNNING", "现场离线：插孔图像识别中")
         # 首轮使用启动前已调好的实际位置；后续轮先执行 LAB_RETURN_ORIGIN。
         # 这里只实拍、识别、发送坐标消息，不生成机械臂运动或插取命令。
         cam = self._camera_for_role("pallet_hole", "CAM_PICK")
@@ -1120,7 +944,7 @@ class FlowController:
         if cap.get("success"):
             started = perf_counter()
             try:
-                hole = self.algorithms.lab_pallet_hole_recognize(
+                hole = self.algorithms.field_pallet_hole_recognize(
                     cap,
                     self.current_cargo,
                 )
@@ -1138,7 +962,7 @@ class FlowController:
                 hole,
                 started,
                 model_invoked=False,
-                note="实验室传统 OpenCV：实时 RGB-D 输出左右插孔相机坐标，再转 WORLD",
+                note="现场离线传统 OpenCV：RGB-D 输出左右插孔相机坐标，再转 WORLD",
                 status="SUCCESS" if hole.get("success") else "FAILED",
             )
         elif self.allow_demo:
@@ -1165,14 +989,14 @@ class FlowController:
 
         if hole.get("success") and hole.get("world_coordinate_frame") != "world":
             try:
-                # 实验室唯一坐标链：实时 PLC XYZR + cam_yolo_lab 外参。
-                # Z/R 只读取当前物理值用于转换，绝不作为运动命令下发。
+                # 现场离线坐标链：Mock PLC XYZR + 现场相机外参。
+                # Z/R 只用于转换，绝不作为自动运动轴目标下发。
                 physical = self.plc.read_positions()
                 if not isinstance(physical, Mapping) or any(physical.get(axis) is None for axis in ("X", "Y", "Z", "R")):
                     raise RuntimeError("无法读取 PLC 当前 XYZR，拒绝生成不可信的插孔 WORLD 坐标")
                 plc_pose = {axis.lower(): float(physical[axis]) for axis in ("X", "Y", "Z", "R")}
                 cap["plc_pose"] = deepcopy(plc_pose)
-                transform = self.algorithms.lab_camera_transform()
+                transform = self.algorithms.field_camera_transform()
                 for side in ("left", "right"):
                     xyz = hole.get(f"{side}_xyz_mm")
                     if xyz is not None:
@@ -1184,7 +1008,7 @@ class FlowController:
             except Exception as exc:
                 hole["success"] = False
                 hole["world_transform_warning"] = str(exc)
-                hole["message"] = f"插孔已识别，但实验室 WORLD 坐标转换失败：{exc}"
+                hole["message"] = f"插孔已识别，但现场离线 WORLD 坐标转换失败：{exc}"
 
         if hole.get("success"):
             targets = {
@@ -1195,7 +1019,7 @@ class FlowController:
             coordinate_message = self.plc.send_message(
                 "PALLET_HOLE_COORDINATES",
                 "SUCCESS",
-                "实验室插孔 WORLD 坐标已下发，仅供 PLC/界面使用，不执行运动或插取",
+                "现场离线插孔 WORLD 坐标已下发，仅供 PLC/界面使用，不执行运动或插取",
                 {
                     "coordinate_frame": "world",
                     "coordinate_unit": "mm",
@@ -1207,10 +1031,10 @@ class FlowController:
 
             result = {
                 "success": True,
-                "lab_mode": True,
+                "field_offline": True,
                 "fork_skipped": True,
                 "motion_skipped": True,
-                "message": "插孔识别完成（实验室：仅下发 WORLD 坐标，不执行运动或物理插取）",
+                "message": "插孔识别完成（现场离线：仅下发 WORLD 坐标，不执行运动或物理插取）",
                 "hole_result": hole,
                 "hole_world_targets": targets,
                 "coordinate_message": coordinate_message,
@@ -1224,7 +1048,7 @@ class FlowController:
         else:
             result = {
                 "success": False,
-                "lab_mode": True,
+                "field_offline": True,
                 "fork_skipped": True,
                 "message": hole.get("message", "插孔定位失败"),
                 "hole_result": hole,
@@ -1255,7 +1079,7 @@ class FlowController:
         return result
 
     def _lab_sense(self):
-        """实验室第2步：相机插孔识别 ∥ 雷达底板四角；任一失败即等待重试。
+        """现场离线第2步：相机插孔识别 ∥ 雷达底板四角；任一失败即等待重试。
 
         后续轮次：只重跑插孔识别，复用首轮雷达车板（round_data 里预置的 radar_result / twin.corners）。
         """
@@ -1289,7 +1113,7 @@ class FlowController:
         summary = {
             "success": pick_ok and radar_ok,
             "continue_anyway": False,
-            "lab_mode": self.is_lab_profile(),
+            "field_offline": True,
             "cycle_flow": True,
             "pick": "SUCCESS" if pick_ok else "FAILED",
             "radar": "SUCCESS" if radar_ok else "FAILED",
@@ -1333,15 +1157,7 @@ class FlowController:
         return summary
 
     def _lab_held_r_deg(self) -> float:
-        """实验室规划仅读取现场 R；R 不作为任何运动轴目标下发。"""
-        if str(getattr(self, "device_mode", "mock")).lower() == "real":
-            try:
-                physical = self.plc.read_positions()
-                if isinstance(physical, Mapping) and physical.get("R") is not None:
-                    return float(physical["R"])
-            except Exception:
-                # 读不到现场值时才退回当前孪生姿态，不能因此向 PLC 写 R。
-                pass
+        """现场离线规划使用孪生当前 R；R 不作为自动目标下发。"""
         hold = getattr(self.robot, "r_hold", None)
         if hold is not None and getattr(hold, "enabled", False) and hold.locked_r_deg is not None:
             return float(hold.locked_r_deg)
@@ -1371,7 +1187,7 @@ class FlowController:
         plc_command: Mapping[str, Any] | None = None,
         held_r_deg: float | None = None,
     ) -> dict[str, Any]:
-        """实验室相机移动：仅写 X/Y，PLC 确认到位后才允许拍照。
+        """现场离线相机移动：仅记录 X/Y，确认到位后才允许读取离线图。
 
         Z 固定由现场保持在 380 mm，R 仅参与相机外参的几何计算；二者绝不写入 PLC。
         """
@@ -1387,11 +1203,11 @@ class FlowController:
                     mapping = dict((GANTRY or {}).get("world_to_gantry") or {})
                 command = transform_world_to_gantry(target_world_pose, mapping)
             except Exception as exc:
-                return {"success": False, "message": f"实验室 XY 换算失败：{exc}"}
+                return {"success": False, "message": f"现场离线 XY 换算失败：{exc}"}
         try:
             xy_targets = {axis: float(command[axis]) for axis in ("X", "Y")}
         except (KeyError, TypeError, ValueError) as exc:
-            return {"success": False, "message": f"实验室 XY 目标无效：{exc}"}
+            return {"success": False, "message": f"现场离线 XY 目标无效：{exc}"}
         if not getattr(self.plc, "connected", False):
             return {"success": False, "message": "PLC 未连接，拒绝相机拍照前移动"}
         try:
@@ -1454,7 +1270,7 @@ class FlowController:
         if not radar.get("success") or not radar_points:
             result = {
                 "success": False,
-                "lab_mode": False,
+                "field_offline": True,
                 "field_mode": True,
                 "camera_world_corners": {},
                 "final_world_corners": {},
@@ -1498,7 +1314,7 @@ class FlowController:
         except Exception as exc:
             result = {
                 "success": False,
-                "lab_mode": False,
+                "field_offline": True,
                 "field_mode": True,
                 "camera_world_corners": {},
                 "final_world_corners": {},
@@ -1567,7 +1383,7 @@ class FlowController:
         plan_ok = bool(lab_space_plan.get("success"))
         result = {
             "success": plan_ok and vision_ok,
-            "lab_mode": False,
+            "field_offline": True,
             "field_mode": True,
             "hikvision_capture": {
                 "success": True,
@@ -1619,7 +1435,7 @@ class FlowController:
             result.update(
                 {
                     "success": True,
-                    "lab_mode": self.is_lab_profile(),
+                    "field_offline": True,
                     "reused": True,
                     "camera_world_corners": deepcopy(preserved_camera),
                     "final_world_corners": deepcopy(preserved_final),
@@ -1644,15 +1460,14 @@ class FlowController:
             self.twin.set_phase(result["message"], self.round_index + 1)
             return result
 
-        if not feature_switches.USE_LAB_CAMERA_ALGO:
-            return self._field_corner_shell_from_radar()
+        return self._field_corner_shell_from_radar()
 
         radar = self.round_data.get("radar_result") or {}
         radar_points = radar.get("world_points") or {}
         if not radar.get("success") or not radar_points:
             result = {
                 "success": False,
-                "lab_mode": True,
+                    "field_offline": True,
                 "camera_world_corners": {},
                 "final_world_corners": {},
                 "message": "雷达没有可用 WORLD 角点，已停止本轮相机精定位",
@@ -1663,7 +1478,7 @@ class FlowController:
 
         held_r = self._lab_held_r_deg()
         try:
-            planner = LabCameraVisitPlanner(self.algorithms.lab_camera_transform())
+            planner = LabCameraVisitPlanner(self.algorithms.field_camera_transform())
             targets = planner.build_pair_targets(
                 radar_points,
                 {"x": 0.0, "y": 0.0, "z": 380.0, "r": held_r},
@@ -1909,7 +1724,7 @@ class FlowController:
         coord_text = "；".join(coord_lines) if coord_lines else "无有效角点"
         result = {
             "success": bool(camera_result.get("success") and lab_space_plan.get("success")),
-            "lab_mode": True,
+            "field_offline": True,
             "held_r_deg": held_r,
             "camera_capture_groups": captured_groups,
             "capture_log": capture_log,
@@ -2036,7 +1851,7 @@ class FlowController:
         if len(center) != 3:
             raise RuntimeError(f"区域 {region.get('region_id')} 缺少几何中心")
         held_r = self._lab_held_r_deg()
-        planner = LabCameraVisitPlanner(self.algorithms.lab_camera_transform())
+        planner = LabCameraVisitPlanner(self.algorithms.field_camera_transform())
         target = planner.build_world_target(
             center,
             {"x": 0.0, "y": 0.0, "z": 380.0, "r": held_r},
@@ -2237,14 +2052,14 @@ class FlowController:
             started,
             model_invoked=False,
             note=(
-                "现场离线：读 place_verify 文件，跳过实验室真机拍照"
+                "现场离线：读取 place_verify 文件，不连接实时相机"
                 if offline
-                else "实验室 dynamic_monitor_lab：传统 OpenCV 纸箱角点 + D435i 深度转 WORLD 后判区"
+                else "现场离线动态监测：传统 OpenCV 纸箱角点 + 离线深度转 WORLD 后判区"
             ),
             status="SUCCESS" if result.get("success") else "FAILED",
         )
         status = "SUCCESS" if result.get("success") else "FAILED"
-        self.plc.send_message(module_id, status, result.get("message", "实验室动态监测完成"), result)
+        self.plc.send_message(module_id, status, result.get("message", "现场离线动态监测完成"), result)
         return result
 
     def _lab_return_origin(self) -> dict[str, Any]:
@@ -2285,7 +2100,7 @@ class FlowController:
             "planning_r_deg": held_r,
             "target_world_pose": world_pose,
             "motion": moved,
-            "message": "已返回实验室原点，仅移动 XY，Z/R 未下发" if moved.get("success") else moved.get("message"),
+            "message": "已返回现场离线工作原点，仅记录 XY，Z/R 未下发" if moved.get("success") else moved.get("message"),
         }
 
     def _lab_pre_place_monitor(self) -> dict[str, Any]:
@@ -2307,7 +2122,7 @@ class FlowController:
         return result
 
     def _lab_place_verify(self):
-        """人工放货后：现场离线读图判区；实验室则到位实拍。"""
+        """人工放货后：读取现场离线图判区。"""
         region = self._resolve_b_region_for_round()
         result = self._lab_dynamic_region_check(
             region,
@@ -2315,7 +2130,7 @@ class FlowController:
             task=f"LAB_POST_PLACE_{region['region_id']}",
             capture_tag="lab_place_verify",
         )
-        result["lab_mode"] = True
+        result["field_offline"] = True
         result["manual_place"] = True
         result["target_region"] = deepcopy(region)
         occupied = self.space.occupy_region_if_passed(
@@ -2327,7 +2142,7 @@ class FlowController:
         if occupied:
             cargo = deepcopy(self.twin.snapshot().get("cargo") or {})
             if cargo:
-                cargo["status"] = "PLACED_MANUAL_LAB"
+                cargo["status"] = "PLACED_MANUAL_FIELD_OFFLINE"
                 cargo["attached_to"] = None
                 cargo["planned_region_id"] = region.get("region_id")
                 self.twin.set_cargo(cargo)
@@ -2412,7 +2227,7 @@ class FlowController:
         if self.round_index >= len(self.queue) or self.round_index >= len(b_regions):
             self.finished = True
             self.running = False
-            reason = "实验室 B 列装货检测完成" if self.round_index >= len(b_regions) else "实验室全部货物流程完成"
+            reason = "现场离线 B 列装货检测完成" if self.round_index >= len(b_regions) else "现场离线全部货物流程完成"
             self.twin.set_phase(reason, self.round_index)
             if self.loading_session_id:
                 self.vehicle_db.finish_session(self.loading_session_id, "COMPLETED")
@@ -2595,7 +2410,7 @@ class FlowController:
     def _corner_recognition(self):
         ids=self.round_data["radar_result"]["corner_ids"]
         meta=self.round_data.get("corner_capture_meta") or {}
-        if feature_switches.USE_LAB_CAMERA_ALGO and not (
+        if False and not (
             self.allow_demo and ids and all((meta.get(pid) or {}).get("demo") for pid in ids)
         ):
             started=perf_counter()
@@ -2609,12 +2424,12 @@ class FlowController:
                 {
                     "image_paths_by_point":self.round_data.get("corner_images"),
                     "corner_ids":ids,
-                    "use_lab_camera_algo":True,
+                    "field_offline":True,
                 },
                 result,
                 started,
                 model_invoked=True,
-                note="实验室 cam_yolo_lab：YOLO+深度+外参直接出 WORLD",
+                note="现场离线相机算法 WORLD 结果透传",
                 status="SUCCESS" if result.get("success") else "FAILED",
             )
             # 实验室路径已得到 WORLD，跳过像素审核（审核面向像素修正）
@@ -2649,7 +2464,7 @@ class FlowController:
         meta=self.round_data["corner_capture_meta"]
         # 实验室相机开关：识别步骤已直接产出 WORLD，这里透传，避免二次变换
         lab_ready=self.round_data.get("lab_camera_world_corners")
-        if feature_switches.USE_LAB_CAMERA_ALGO and isinstance(lab_ready, Mapping) and lab_ready.get("success") and lab_ready.get("world_points"):
+        if False and isinstance(lab_ready, Mapping) and lab_ready.get("success") and lab_ready.get("world_points"):
             started=perf_counter()
             result={
                 "success":True,
@@ -2661,9 +2476,9 @@ class FlowController:
                 "details":deepcopy(lab_ready.get("details") or {}),
                 "radar_used_for_final_geometry":False,
                 "message":"实验室相机算法 WORLD 结果透传（未再跑现场 CameraCornerWorldService）",
-                "use_lab_camera_algo":True,
+                "field_offline":True,
             }
-            self._evidence("CAMERA_WORLD",{"capture_meta":meta,"use_lab_camera_algo":True},result,started,note="实验室一体 WORLD 透传")
+            self._evidence("CAMERA_WORLD",{"capture_meta":meta,"field_offline":True},result,started,note="现场离线一体 WORLD 透传")
             self.round_data["camera_world_corners"]=result
             self.twin.update_truck(corners=result["world_points"])
             return result
@@ -2940,7 +2755,7 @@ class FlowController:
         try:
             if code=="DEVICE_CHECK":
                 data=self._device_check()
-                if self.uses_coord_cycle_flow() and not data.get("all_online"):
+                if not data.get("all_online"):
                     detail = str(data.get("message") or "未知设备故障")
                     raise RuntimeError(f"设备未全部在线，已停止流程：{detail}")
             elif code=="LAB_RETURN_ORIGIN":
@@ -3050,7 +2865,7 @@ class FlowController:
             "forced_continue": True,
             "reason": str(reason or "用户选择失败后继续"),
         }
-        if self.uses_coord_cycle_flow() and code == "LAB_PLACE_VERIFY":
+        if code == "LAB_PLACE_VERIFY":
             self._record(code, name, "warning", f"失败后继续：{detail['reason']}", detail)
             self.twin.set_alarm(None)
             advance = self._advance_lab_round()
