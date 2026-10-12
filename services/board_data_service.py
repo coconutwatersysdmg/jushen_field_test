@@ -50,12 +50,14 @@ def compute_corner_metrics(points: Sequence[Any]) -> Dict[str, float]:
     tail = tuple((p3[index] + p4[index]) / 2.0 for index in range(3))
     dx, dy, dz = (tail[index] - head[index] for index in range(3))
     horizontal = sqrt(dx * dx + dy * dy)
+    tilt = 0.0 if horizontal < 1e-9 else degrees(atan2(dz, horizontal))
+    offset = 0.0 if horizontal < 1e-9 else degrees(atan2(dx, -dy))
     return {
         "length_mm": (_distance(p1, p3) + _distance(p2, p4)) / 2.0,
         "width_mm": (_distance(p1, p2) + _distance(p3, p4)) / 2.0,
         "height_mean_mm": (p1[2] + p2[2] + p3[2] + p4[2]) / 4.0,
-        "tilt_angle_deg": degrees(atan2(dz, horizontal)),
-        "offset_angle_deg": degrees(atan2(dx, -dy)),
+        "tilt_angle_deg": tilt,
+        "offset_angle_deg": offset,
     }
 
 

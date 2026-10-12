@@ -40,6 +40,17 @@ class BoardDataServiceTests(unittest.TestCase):
 
         self.assertAlmostEqual(metrics["offset_angle_deg"], 14.0362434679, places=6)
 
+    def test_zero_horizontal_run_matches_radar_zero_angle_fallback(self):
+        metrics = compute_corner_metrics([
+            [0, 0, 0],
+            [2000, 0, 0],
+            [0, 0, 100],
+            [2000, 0, 100],
+        ])
+
+        self.assertEqual(metrics["tilt_angle_deg"], 0.0)
+        self.assertEqual(metrics["offset_angle_deg"], 0.0)
+
     def test_camera_corner_groups_support_eight_six_and_four_points(self):
         eight = {f"P{i}": point(i, 0, 0) for i in range(1, 9)}
         six = {f"P{i}": point(i, 0, 0) for i in range(1, 7)}
