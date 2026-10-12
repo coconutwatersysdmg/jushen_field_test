@@ -89,6 +89,7 @@ class BoardDataPanel(QWidget):
         for board_title in ("第一块板", "第二块板"):
             card = QFrame()
             card.setObjectName("boardDataCard")
+            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             card_layout = QVBoxLayout(card)
             card_layout.setContentsMargins(12, 10, 12, 12)
             card_layout.setSpacing(8)
@@ -101,7 +102,7 @@ class BoardDataPanel(QWidget):
             table = self._create_table()
             self.board_tables.append(table)
             card_layout.addWidget(table)
-            layout.addWidget(card, 1)
+            layout.addWidget(card, 0)
 
         layout.addStretch(0)
         self.setStyleSheet(

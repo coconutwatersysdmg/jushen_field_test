@@ -20,6 +20,7 @@ from ui.twin_bridge import TwinBridge
 from ui.debug_dialog import DebugInputDialog
 from ui.corner_review_dialog import run_corner_review
 from ui.plc_motion_dialog import PlcMotionDialog, open_plc_manual_console
+from ui.board_data_panel import BoardDataPanel
 from ui.theme import is_light_theme, twin_clear_color
 from config.feature_switches import (
     apply_run_profile,
@@ -234,7 +235,7 @@ class MainWindow(QMainWindow):
         # QQuickWidget 放进 QTabWidget 隐藏/显示会极卡；孪生常驻底层，其它页用不透明遮罩盖住。
         center_wrap=QWidget(); center_wrap_l=QVBoxLayout(center_wrap); center_wrap_l.setContentsMargins(0,0,0,0); center_wrap_l.setSpacing(0)
         self.center_tab_bar=QTabBar(); self.center_tab_bar.setExpanding(False); self.center_tab_bar.setDocumentMode(True)
-        self.center_tab_bar.addTab("数字孪生"); self.center_tab_bar.addTab("实时雷达"); self.center_tab_bar.addTab("本流程相机")
+        self.center_tab_bar.addTab("数字孪生"); self.center_tab_bar.addTab("实时雷达"); self.center_tab_bar.addTab("本流程相机"); self.center_tab_bar.addTab("板面数据")
         center_wrap_l.addWidget(self.center_tab_bar,0)
         self.center_stage=QWidget(); self.center_stage.setMinimumHeight(300)
         center_wrap_l.addWidget(self.center_stage,1)
@@ -308,6 +309,8 @@ class MainWindow(QMainWindow):
         self.history_preview.setVisible(False)
         hist_l.addWidget(self.history_preview,0)
         self.center_overlay.addWidget(hist_page)
+        self.board_data_panel=BoardDataPanel(self.center_stage)
+        self.center_overlay.addWidget(self.board_data_panel)
         self._history_gallery_sig=""
         self._center_tab_index=0
         self.center_tab_bar.currentChanged.connect(self._on_center_tab_changed)
@@ -1663,6 +1666,7 @@ class MainWindow(QMainWindow):
         mode_text = ("实验室首轮建图" if s["first_round"] else "实验室 B 列循环") if lab else ("首轮建图" if s["first_round"] else "循环装载（跳过雷达/角点）")
         self.phase.setText(f"第 {s['round']} 轮 · {mode_text} · {s['step_name']}"); self.progress.setText(f"{s['completed']} / {s['total']}")
         rd=s.get("round_data") or {}; cargo=t.get("cargo") or {}; p=cargo.get("pose") or {}; truck=t.get("truck") or {}; target=truck.get("current_target") or {}; tp=target.get("final_world_pose") or {}; fb=t.get("feedback_compensation_mm") or {}
+        self.board_data_panel.update_from_round_data(rd)
         hole=((rd.get("pick_result") or {}).get("hole_result") or {})
         self._refresh_live_metrics(s, t, rd)
         if lab:
