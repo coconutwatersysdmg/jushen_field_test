@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QFrame, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit, QMessageBox,
     QTabWidget, QTabBar, QToolButton, QSizePolicy, QComboBox, QCheckBox, QListWidget, QListWidgetItem,
-    QAbstractItemView, QStackedWidget,
+    QAbstractItemView, QStackedWidget, QFileDialog,
 )
 
 from controllers.flow_controller import FlowController
@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
         (4, "B 区循环：监测 → 人工确认 → 拍照判区"),
     ]
     STEP_STAGE = {
+        "RADAR_TEST": 2,
         "DEVICE_CHECK":1,"LAB_SENSE":2,"LAB_CORNER_SHELL":3,
         "LAB_RETURN_ORIGIN":4,"LAB_PRE_PLACE_MONITOR":4,"LAB_WAIT_MANUAL_PLACE":4,"LAB_PLACE_VERIFY":4,
         "PRE_PICK_OFFSET":2,"PARALLEL_LOCATE":3,"PICK_ONLY":3,"RADAR_TO_CAMERA":4,
@@ -350,6 +351,9 @@ class MainWindow(QMainWindow):
         self.next_btn=QPushButton("执行下一步"); self.next_btn.setObjectName("primary"); self.next_btn.clicked.connect(self._next)
         self.auto_btn=QPushButton("自动运行"); self.auto_btn.clicked.connect(self._auto)
         self.debug_btn=QPushButton("调试输入"); self.debug_btn.clicked.connect(self._debug)
+        self.select_pcd_btn=QPushButton("选择 PCD")
+        self.select_pcd_btn.setToolTip("选择本次雷达算法使用的 PCD；默认打开项目下的存itl文件夹")
+        self.select_pcd_btn.clicked.connect(self._select_radar_pcd)
         self.offline_check_btn=QPushButton("检查离线路径")
         self.offline_check_btn.setToolTip("检查 config/offline_paths.py：缺文件/路径错误会弹窗说明，不闪退")
         self.offline_check_btn.clicked.connect(lambda: self._check_offline_paths(show_ok=True, force_reload=True))
@@ -366,7 +370,7 @@ class MainWindow(QMainWindow):
         self.plc_live_btn=QPushButton("PLC 实时坐标")
         self.plc_live_btn.setToolTip("通过 Snap7 只读监视 PLC DB 当前坐标；可配置 DB 编号、字节偏移和类型")
         self.plc_live_btn.clicked.connect(self._show_plc_coordinates)
-        for b in (self.next_btn,self.auto_btn,self.debug_btn,self.offline_check_btn,reset,self.plc_panel_btn,self.plc_live_btn,self.plc_manual_btn): controls.addWidget(b)
+        for b in (self.select_pcd_btn,self.next_btn,self.auto_btn,self.debug_btn,self.offline_check_btn,reset,self.plc_panel_btn,self.plc_live_btn,self.plc_manual_btn): controls.addWidget(b)
         controls.addWidget(self.auto_push_cb)
         controls.addStretch(1); cl.addWidget(tool,0)
 
@@ -536,7 +540,31 @@ class MainWindow(QMainWindow):
 
     def _refresh_offline_media(self) -> None:
         self._refresh_radar_preview(force=True)
-        self._refresh_history_gallery(force=True)
+        if not self.controller.is_radar_only_test():
+            self._refresh_history_gallery(force=True)
+
+    def _select_radar_pcd(self) -> bool:
+        if self._step_busy or self.timer.isActive() or self.controller.running:
+            return False
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "请选择本次测试的 PCD 文件", str(PROJECT_ROOT / "存itl"),
+            "PCD 点云 (*.pcd *.PCD)",
+        )
+        if not filename:
+            print("[RADAR_TEST] 未选择 PCD，停止推进流程；文件同步仍继续运行。", flush=True)
+            return False
+        try:
+            if self.controller.finished:
+                self._reset()
+            self.controller.select_radar_pcd(filename)
+            self.debug_inputs = deepcopy(self.controller.debug_inputs)
+            self._refresh_radar_preview(force=True)
+            self._refresh()
+            return True
+        except (ValueError, OSError) as exc:
+            print(f"[RADAR_TEST] PCD 选择失败：{exc}", flush=True)
+            QMessageBox.warning(self, "PCD 无效", str(exc))
+            return False
 
     def _reload_offline_debug_inputs(self) -> None:
         """重新从 offline_paths.py 注入调试输入。"""
@@ -557,6 +585,16 @@ class MainWindow(QMainWindow):
         """检查离线文件；缺数据弹窗+控制台，不闪退。返回是否无致命错误。"""
         if force_reload:
             self._reload_offline_debug_inputs()
+        if self.controller.is_radar_only_test():
+            from config.offline_path_check import validate_offline_paths, format_report_text
+
+            report = validate_offline_paths(
+                {"radar_pcd": self.debug_inputs.get("point_cloud_path", "")},
+                radar_only=True, require_radar=show_ok,
+            )
+            if show_ok:
+                QMessageBox.information(self, "雷达输入检查", format_report_text(report))
+            return bool(report["ok"])
         try:
             from config.offline_path_check import format_report_text, validate_offline_paths
 
@@ -651,6 +689,11 @@ class MainWindow(QMainWindow):
         """Prefer debug_inputs, then offline_paths (supports directory → newest .pcd)."""
         from services.offline_pipeline import resolve_path
 
+        if self.controller.is_radar_only_test():
+            raw = str(self.debug_inputs.get("point_cloud_path") or "")
+            path = Path(raw).expanduser()
+            return str(path.resolve()) if path.suffix.lower() == ".pcd" and path.is_file() else ""
+
         candidates = [
             str((self.debug_inputs or {}).get("point_cloud_path") or "").strip(),
             str(getattr(self.controller, "debug_inputs", {}).get("point_cloud_path") or "").strip(),
@@ -686,7 +729,7 @@ class MainWindow(QMainWindow):
             self.radar_preview.setVisible(False)
             self.radar_preview.setPixmap(QPixmap())
             self.radar_preview_info.setText("离线雷达 PCD · 未配置")
-            self.radar_empty.setText("未配置雷达 PCD\n请在 config/offline_paths.py 或「调试输入」填写路径")
+            self.radar_empty.setText("请点击「选择 PCD」选择本次测试文件\n同步文件保存在项目根目录下的存itl文件夹")
             return
 
         try:
@@ -1042,6 +1085,7 @@ class MainWindow(QMainWindow):
         old_debug=deepcopy(getattr(self.controller, "debug_inputs", {}) or self.debug_inputs)
         applied=apply_run_profile(profile_id, persist=True)
         self.controller=FlowController()
+        self.controller.set_ui_event_pump(self._pump_lab_camera_preview)
         self.controller.set_state_listener(self.motionSnapshot.emit)
         self.controller.set_plc_command_listener(self.plcCommandReady.emit)
         self.controller.set_corner_review_callback(self._review_corners)
@@ -1088,6 +1132,7 @@ class MainWindow(QMainWindow):
             self.lab_right_panel.setVisible(lab)
         if hasattr(self, "debug_btn"):
             self.debug_btn.setVisible(not lab)
+        self.select_pcd_btn.setVisible(self.controller.is_radar_only_test())
         self.setWindowTitle("装载数字孪生监控台 · 现场离线联调")
         if hasattr(self, "main_splitter"):
             # 左栏中间量多，加宽；右栏收窄，相机/雷达参数走专用页
@@ -1239,14 +1284,30 @@ class MainWindow(QMainWindow):
         # 内部入口：开会话并立刻跑 DEVICE_CHECK。界面上由「执行下一步 / 自动运行」触发。
         if self._step_busy: return
         try:
-            self._check_offline_paths(show_ok=False, force_reload=True)
+            if self.controller.is_radar_only_test():
+                try:
+                    self.controller._require_selected_radar_pcd()
+                except RuntimeError:
+                    if not self._select_radar_pcd():
+                        return False
+            if not self._check_offline_paths(show_ok=False, force_reload=True):
+                return False
             self.controller.set_debug_inputs(self.debug_inputs)
             self.controller.start()
             self._refresh()
             self._run_device_check_on_start()
+            if self.controller.is_radar_only_test():
+                self._begin_step_run()
+                try:
+                    self.controller.execute_next()
+                finally:
+                    self._end_step_run()
             self._refresh()
+            return True
         except Exception as e:
             self._step_busy=False
+            if self.controller.is_radar_only_test():
+                self.controller.running = False
             print(f"[MainWindow] 启动失败：{e}", flush=True)
             QMessageBox.critical(
                 self,
@@ -1254,6 +1315,7 @@ class MainWindow(QMainWindow):
                 f"程序不会退出，可改路径后重试。\n\n{e}",
             )
             self._refresh()
+            return False
     def _begin_step_run(self):
         """锁定本次点击要跑的流程格；execute_next 前进 step_index 后仍用它画 RUN。"""
         snap = self.controller.snapshot()
@@ -1409,7 +1471,8 @@ class MainWindow(QMainWindow):
                 self._show_plc_dialog()
                 return
             if not self.controller.running:
-                self._start()
+                if not self._start() or self.controller.finished:
+                    return
             self.timer.start()
             self.auto_btn.setText("暂停")
         self._sync_auto_push_policy()
@@ -1641,11 +1704,14 @@ class MainWindow(QMainWindow):
         # 注意：execute_next 结束后 step_code 已指向「下一格」，不能用它+busy 画 RUN，否则会误亮下一格。
         lab = self._is_lab_ui()
         stages = self.LAB_FLOW_STAGES if lab else self.FLOW_STAGES
+        radar_only = self.controller.is_radar_only_test()
+        if radar_only:
+            stages = [(1, "选择 PCD"), (2, "雷达算法测试"), (3, "查看结果"), (4, "测试完成")]
         nodes = self.lab_flow_nodes if lab else self.flow_nodes
         if s.get("finished"):
             current_stage = 5 if lab else 13
         elif not s.get("running") and not s.get("results"):
-            current_stage=0
+            current_stage=2 if radar_only and self.debug_inputs.get("radar_pcd_selected") else 0
         else:
             current_stage=self.STEP_STAGE.get(s.get("step_code"),1)
             if lab and s.get("step_code") == "DONE":
@@ -1678,12 +1744,14 @@ class MainWindow(QMainWindow):
     def _update_step_controls(self):
         """步骤 RUN 或 PLC 弹窗待处理时，禁止点「执行下一步」。"""
         busy = bool(self._step_busy or self._plc_blocks_flow() or self.controller.finished)
+        if hasattr(self, "select_pcd_btn"):
+            self.select_pcd_btn.setEnabled(not self._step_busy and not self.timer.isActive() and not self.controller.running)
         if hasattr(self, "next_btn"):
             self.next_btn.setEnabled(not busy)
             if self._is_lab_ui() and self.controller.current_step[0] == "LAB_WAIT_MANUAL_PLACE":
                 self.next_btn.setText("确认已放好，开始拍照检测")
             else:
-                self.next_btn.setText("执行下一步")
+                self.next_btn.setText("运行雷达算法" if self.controller.is_radar_only_test() else "执行下一步")
         if hasattr(self, "auto_btn") and not self.timer.isActive():
             # 自动运行进行中仍可点「暂停」；未在自动跑时若步骤忙则禁止启动自动
             self.auto_btn.setEnabled(not self._step_busy and not self.controller.finished)
@@ -1692,7 +1760,11 @@ class MainWindow(QMainWindow):
         s=s or self.controller.snapshot(); t=s["twin"]; self.bridge.update_state(t); self._refresh_flow_chain(s)
         lab = self._is_lab_ui()
         mode_text = ("实验室首轮建图" if s["first_round"] else "实验室 B 列循环") if lab else ("首轮建图" if s["first_round"] else "循环装载（跳过雷达/角点）")
+        if self.controller.is_radar_only_test():
+            mode_text = "仅雷达算法测试"
         self.phase.setText(f"第 {s['round']} 轮 · {mode_text} · {s['step_name']}"); self.progress.setText(f"{s['completed']} / {s['total']}")
+        if self.controller.is_radar_only_test():
+            self.progress.setText("测试完成" if s["finished"] else ("PCD 已选择" if self.debug_inputs.get("radar_pcd_selected") else "等待选择 PCD"))
         rd=s.get("round_data") or {}; cargo=t.get("cargo") or {}; p=cargo.get("pose") or {}; truck=t.get("truck") or {}; target=truck.get("current_target") or {}; tp=target.get("final_world_pose") or {}; fb=t.get("feedback_compensation_mm") or {}
         self.board_data_panel.update_from_round_data(rd)
         hole=((rd.get("pick_result") or {}).get("hole_result") or {})

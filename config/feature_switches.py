@@ -20,6 +20,12 @@ PROFILE_STATE_FILE = PROJECT_ROOT / "workdir" / "ui_run_profile.json"
 # lab   = 实验室：真机适配器 + 实验室雷达/相机算法
 # field = 完全真实：真机适配器 + 现场 PointNet / corner_service
 RUN_PROFILE = "field"
+# 当前现场任务：只测试雷达 PCD，暂停相机/插孔/放货流程。
+RADAR_ONLY_TEST = True
+
+
+def is_radar_only_test() -> bool:
+    return RADAR_ONLY_TEST and str(RUN_PROFILE or "").strip().lower() == "field"
 
 RUN_PROFILES: Dict[str, Dict[str, Any]] = {
     "sim": {
@@ -57,7 +63,7 @@ RUN_PROFILES: Dict[str, Dict[str, Any]] = {
     "field": {
         "id": "field",
         "title": "现场离线联调",
-        "subtitle": "同款孪生界面；读工控机离线文件 + 现场 PointNet/角点 YOLO（不实时连相机雷达）",
+        "subtitle": "当前仅测试雷达：同步工控机文件，手动选择 PCD 后运行 PointNet",
         "switches": {
             # mock：不连真机 SDK；用 config/offline_paths.py 注入的文件路径
             "DEVICE_MODE": "mock",

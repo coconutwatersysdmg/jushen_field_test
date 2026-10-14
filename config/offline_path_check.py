@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
 from config.offline_paths import get_offline_paths
@@ -13,14 +14,33 @@ def _log(msg: str) -> None:
     print(f"[offline_paths] {msg}", file=sys.stderr, flush=True)
 
 
-def validate_offline_paths(cfg: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def validate_offline_paths(
+    cfg: Dict[str, Any] | None = None, *, radar_only: bool | None = None, require_radar: bool = True,
+) -> Dict[str, Any]:
     """返回 {ok, errors, warnings, resolved, summary}。ok=无 errors（warnings 仍可有）。"""
-    data = dict(cfg or get_offline_paths())
+    from config.feature_switches import is_radar_only_test
+
+    if radar_only is None:
+        radar_only = is_radar_only_test()
+    data = dict(cfg if cfg is not None else get_offline_paths())
     errors: List[str] = []
     warnings: List[str] = []
     resolved: Dict[str, str] = {}
 
     raw_pcd = str(data.get("radar_pcd") or "").strip()
+    if radar_only:
+        if not raw_pcd:
+            if require_radar:
+                errors.append("请先选择 PCD 文件，未选择前不能运行雷达算法。")
+        else:
+            path = Path(raw_pcd).expanduser()
+            if path.suffix.lower() != ".pcd" or not path.is_file():
+                errors.append(f"所选 PCD 文件不存在或类型错误：{path}")
+            else:
+                resolved["radar_pcd"] = str(path.resolve())
+        summary = errors[0] if errors else ("雷达 PCD 已就绪；仅运行雷达算法。" if resolved else "雷达测试：等待用户选择 PCD 文件。")
+        _log(summary)
+        return {"ok": not errors, "errors": errors, "warnings": [], "resolved": resolved, "summary": summary}
     if not raw_pcd:
         errors.append("未配置雷达路径（radar_pcd）。填 .pcd 文件或其所在文件夹。")
     else:

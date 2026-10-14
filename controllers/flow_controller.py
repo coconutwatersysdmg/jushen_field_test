@@ -105,6 +105,10 @@ class FlowController:
     LAB_REPEAT_STEPS = list(LAB_POLICY_REPEAT_STEPS)
 
     @staticmethod
+    def is_radar_only_test() -> bool:
+        return feature_switches.is_radar_only_test()
+
+    @staticmethod
     def is_lab_profile() -> bool:
         return str(feature_switches.RUN_PROFILE or "").strip().lower() == "lab"
 
@@ -232,7 +236,10 @@ class FlowController:
             from config.offline_path_check import validate_offline_paths
 
             _dbg = build_debug_inputs_from_offline(self.module_evidence.example_debug_inputs())
-            _check = validate_offline_paths()
+            _check = validate_offline_paths(
+                {"radar_pcd": _dbg.get("point_cloud_path", "")} if self.is_radar_only_test() else None,
+                require_radar=not self.is_radar_only_test(),
+            )
         except Exception as exc:
             print(f"[FlowController] 离线路径加载失败：{exc}", flush=True)
             _dbg = self.module_evidence.example_debug_inputs()
@@ -453,6 +460,8 @@ class FlowController:
     def is_first_round(self): return self.round_index == 0
     @property
     def steps(self):
+        if self.is_radar_only_test():
+            return [("RADAR_TEST", "雷达算法测试（所选 PCD）")]
         if self.uses_coord_cycle_flow():
             return list(cycle_steps_for_round(self.round_index))
         return self.FIRST_STEPS if self.is_first_round else self.REPEAT_STEPS
@@ -518,6 +527,27 @@ class FlowController:
             if hasattr(self.camera,"set_tagged_depth"): self.camera.set_tagged_depth(tag,path)
         # 真机策略可能清空了部分 tag；再刷一遍，避免上面循环把空路径漏掉。
         self._reapply_cleared_live_camera_tags()
+
+    def select_radar_pcd(self, raw: str) -> str:
+        path = Path(raw).expanduser()
+        if path.suffix.lower() != ".pcd" or not path.is_file():
+            raise ValueError(f"请选择存在的 PCD 文件：{path}")
+        selected = str(path.resolve())
+        self.set_debug_inputs({
+            **self.debug_inputs,
+            "point_cloud_path": selected,
+            "point_cloud_example_only": False,
+            "radar_pcd_selected": True,
+        })
+        print(f"[RADAR_TEST] 已选择 PCD：{selected}", flush=True)
+        return selected
+
+    def _require_selected_radar_pcd(self) -> str:
+        raw = str(self.debug_inputs.get("point_cloud_path") or "")
+        path = Path(raw).expanduser()
+        if not self.debug_inputs.get("radar_pcd_selected") or path.suffix.lower() != ".pcd" or not path.is_file():
+            raise RuntimeError("请先选择有效的 PCD 文件，未选择前不能运行雷达算法。")
+        return str(path.resolve())
 
     def _use_live_radar(self) -> bool:
         if str(getattr(self, "device_mode", "mock")).lower() != "real":
@@ -638,6 +668,12 @@ class FlowController:
         self._save()
 
     def start(self):
+        if self.is_radar_only_test():
+            self._require_selected_radar_pcd()
+            self.running = True
+            self.finished = False
+            self.twin.set_phase(self.current_step[1], 1)
+            return self.snapshot()
         if not self.queue: raise RuntimeError("装载计划为空")
         if not self.loading_session_id:
             truck=self.twin.snapshot().get("truck") or {}
@@ -1046,6 +1082,33 @@ class FlowController:
             "raw_radar_reference":{k:deepcopy(r.get(k)) for k in ("board_mode","boards","first_workface_loading_plan")},
             "final_board_judgement_source":"camera_not_radar",
         }
+
+    def _run_radar_only_test(self):
+        path = self._require_selected_radar_pcd()
+        print(f"[RADAR_TEST] 开始雷达算法：{path}", flush=True)
+        started = perf_counter()
+        self.twin.set_parallel("radar", "RUNNING", f"处理 PCD：{path}")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                self.algorithms.radar_process,
+                {"success": True, "pcd_path": path},
+                {"instance_id": "radar_test"},
+            )
+            while not future.done():
+                if callable(self.ui_event_pump):
+                    self.ui_event_pump()
+                sleep(0.02)
+            output = future.result()
+        self.round_data["radar_result"] = output
+        self._evidence("POINTNET_TRUCK", {"pcd_path": path}, output, started,
+                       model_invoked=True, note="仅雷达算法测试；未调用相机或 PLC 运动")
+        status = "SUCCESS" if output.get("success") else "FAILED"
+        self.twin.set_parallel("radar", status, output.get("message", ""), output)
+        print(f"[RADAR_TEST] {status} 耗时={perf_counter()-started:.3f}s 结果="
+              + json.dumps(output, ensure_ascii=False, default=str), flush=True)
+        if not output.get("success"):
+            raise RuntimeError(output.get("message") or "雷达算法失败")
+        return output
 
     def _radar_task(self):
         if self.round_data.get("radar_result",{}).get("success"): return self.round_data["radar_result"]
@@ -2938,7 +3001,11 @@ class FlowController:
         if not self.running: self.start()
         code,name=self.current_step; self.twin.set_phase(name,self.round_index+1)
         try:
-            if code=="DEVICE_CHECK":
+            if code=="RADAR_TEST":
+                data = self._run_radar_only_test()
+                self.finished = True
+                self.running = False
+            elif code=="DEVICE_CHECK":
                 data=self._device_check()
                 if self.uses_coord_cycle_flow() and not data.get("all_online"):
                     detail = str(data.get("message") or "未知设备故障")

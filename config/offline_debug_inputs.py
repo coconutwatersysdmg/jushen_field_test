@@ -23,6 +23,16 @@ def _abs(raw: str) -> str:
 def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """优先用 config/offline_paths.py；空字段保留 base 里的示例（若有）。"""
     out = deepcopy(base or {})
+    from config.feature_switches import is_radar_only_test
+
+    if is_radar_only_test():
+        # Never silently substitute a demo/newest PCD for the user's selection.
+        return {
+            "point_cloud_path": str(out.get("point_cloud_path") or "") if out.get("radar_pcd_selected") else "",
+            "radar_pcd_selected": bool(out.get("radar_pcd_selected")),
+            "point_cloud_example_only": False,
+            "offline_field_test": True,
+        }
     cfg = get_offline_paths()
 
     raw_pcd = str(cfg.get("radar_pcd") or "").strip()

@@ -16,7 +16,7 @@ if not exist "%PYTHON%" (
 )
 
 "%PYTHON%" -c "import sys; print(sys.version); print(sys.executable)"
-"%PYTHON%" "%~dp0main.py" %*
+"%PYTHON%" -u "%~dp0main.py" %*
 echo exit=%ERRORLEVEL%
 pause
 endlocal

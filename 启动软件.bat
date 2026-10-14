@@ -7,9 +7,7 @@ set "PYTHONUTF8=1"
 
 REM Prefer project-local env only (standalone; no sibling project).
 set "PYTHON=%~dp0.venv\Scripts\python.exe"
-set "PYTHONW=%~dp0.venv\Scripts\pythonw.exe"
 if not exist "%PYTHON%" set "PYTHON=%~dp0runtime\python.exe"
-if not exist "%PYTHONW%" if exist "%~dp0runtime\pythonw.exe" set "PYTHONW=%~dp0runtime\pythonw.exe"
 
 if not exist "%PYTHON%" (
   echo [ERROR] Local Python not found.
@@ -18,10 +16,8 @@ if not exist "%PYTHON%" (
   exit /b 1
 )
 
-if exist "%PYTHONW%" (
-  start "" "%PYTHONW%" "%~dp0main.py" %*
-) else (
-  start "" "%PYTHON%" "%~dp0main.py" %*
-)
+"%PYTHON%" -u "%~dp0main.py" %*
+echo exit=%ERRORLEVEL%
+pause
 endlocal
 exit /b 0

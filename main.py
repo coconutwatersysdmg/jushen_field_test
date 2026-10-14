@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import faulthandler
+import atexit
 import ctypes
 import os
 import platform
@@ -9,6 +10,7 @@ import subprocess
 import sys
 import time
 import traceback
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +30,8 @@ INSTANCE_SERVER_NAME = "jushen-field-test-main-window"
 INSTANCE_MUTEX_NAME = "Local\\JushenFieldTestMainWindow"
 _FAULT_STREAM = None
 _RADAR_SYNC_STARTED = False
+_RADAR_SYNC_PROCESS = None
+_RADAR_SYNC_THREAD = None
 
 
 def _local_python() -> Path | None:
@@ -40,6 +44,10 @@ def _local_python() -> Path | None:
 
 def _log_startup(message: str) -> None:
     try:
+        print(message, flush=True)
+    except (OSError, ValueError):
+        pass
+    try:
         STARTUP_LOG.parent.mkdir(parents=True, exist_ok=True)
         with STARTUP_LOG.open("a", encoding="utf-8") as stream:
             stream.write(f"[{datetime.now().isoformat(timespec='milliseconds')}] pid={os.getpid()} {message}\n")
@@ -47,27 +55,69 @@ def _log_startup(message: str) -> None:
         pass
 
 
+def _forward_radar_sync_output(process) -> None:
+    """Drain the child's pipe in a background thread, including errors and exit status."""
+    try:
+        for line in process.stdout:
+            _log_startup(line.rstrip())
+        code = process.wait()
+        _log_startup(f"[RADAR_SYNC] PowerShell exited code={code}")
+        if code != 0:
+            _log_startup("[RADAR_SYNC] 监听已停止；不影响选择本地 PCD 和运行雷达算法。")
+    except Exception as exc:
+        _log_startup(f"[RADAR_SYNC] Output forwarding failed: {exc}")
+        _log_startup("[RADAR_SYNC] 监听日志异常；不影响选择本地 PCD 和运行雷达算法。")
+    finally:
+        process.stdout.close()
+
+
+def _stop_radar_sync() -> None:
+    process = _RADAR_SYNC_PROCESS
+    if process is not None and process.poll() is None:
+        try:
+            process.terminate()
+            process.wait(timeout=2)
+        except Exception:
+            pass
+    if _RADAR_SYNC_THREAD is not None:
+        _RADAR_SYNC_THREAD.join(timeout=2)
+
+
 def _start_radar_sync() -> None:
     """Start the Windows sync script once without waiting for it to finish."""
-    global _RADAR_SYNC_STARTED
-    if platform.system() != "Windows" or _RADAR_SYNC_STARTED:
+    global _RADAR_SYNC_STARTED, _RADAR_SYNC_PROCESS, _RADAR_SYNC_THREAD
+    if platform.system() != "Windows":
+        return
+    if _RADAR_SYNC_STARTED and _RADAR_SYNC_PROCESS is not None and _RADAR_SYNC_PROCESS.poll() is None:
+        _log_startup("[RADAR_SYNC] Monitor already running")
         return
     try:
         script_path = PROJECT_ROOT / "scripts" / "radar_sync.ps1"
-        subprocess.Popen(
+        if not script_path.is_file():
+            raise FileNotFoundError(f"Sync script missing: {script_path}")
+        _log_startup(f"[RADAR_SYNC] Starting monitor: {script_path}; target={PROJECT_ROOT / '存itl'}")
+        process = subprocess.Popen(
             [
-                "powershell.exe", "-WindowStyle", "Hidden",
+                "powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
                 "-ExecutionPolicy", "Bypass", "-File", str(script_path),
+                "-ParentProcessId", str(os.getpid()),
             ],
             creationflags=subprocess.CREATE_NO_WINDOW,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
         )
+        _RADAR_SYNC_PROCESS = process
         _RADAR_SYNC_STARTED = True
-        _log_startup(f"RADAR_SYNC_STARTED script={script_path}")
+        _RADAR_SYNC_THREAD = threading.Thread(target=_forward_radar_sync_output, args=(process,), daemon=True)
+        _RADAR_SYNC_THREAD.start()
+        atexit.register(_stop_radar_sync)
+        _log_startup(f"RADAR_SYNC_STARTED pid={process.pid} script={script_path}")
     except Exception as exc:
-        message = f"RADAR_SYNC_START_FAILED {exc}"
+        message = f"RADAR_SYNC_START_FAILED {exc}；不影响选择本地 PCD 和运行雷达算法。"
         _log_startup(message)
         print(message, file=sys.stderr)
 

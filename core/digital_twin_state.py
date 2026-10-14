@@ -323,6 +323,7 @@ class DigitalTwinState:
             self._touch()
 
     def add_message(self, source: str, status: str, message: str, data=None):
+        print(f"[{source}][{status}] {message}", flush=True)
         with self._lock:
             self.state["messages"].append({
                 "time": datetime.now().isoformat(timespec="seconds"),
