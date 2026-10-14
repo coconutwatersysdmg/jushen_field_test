@@ -4,6 +4,8 @@ from __future__ import annotations
 import faulthandler
 import ctypes
 import os
+import platform
+import subprocess
 import sys
 import time
 import traceback
@@ -25,6 +27,7 @@ FAULT_LOG = PROJECT_ROOT / "logs" / "startup_fault.log"
 INSTANCE_SERVER_NAME = "jushen-field-test-main-window"
 INSTANCE_MUTEX_NAME = "Local\\JushenFieldTestMainWindow"
 _FAULT_STREAM = None
+_RADAR_SYNC_STARTED = False
 
 
 def _local_python() -> Path | None:
@@ -42,6 +45,31 @@ def _log_startup(message: str) -> None:
             stream.write(f"[{datetime.now().isoformat(timespec='milliseconds')}] pid={os.getpid()} {message}\n")
     except Exception:
         pass
+
+
+def _start_radar_sync() -> None:
+    """Start the Windows sync script once without waiting for it to finish."""
+    global _RADAR_SYNC_STARTED
+    if platform.system() != "Windows" or _RADAR_SYNC_STARTED:
+        return
+    try:
+        script_path = PROJECT_ROOT / "scripts" / "radar_sync.ps1"
+        subprocess.Popen(
+            [
+                "powershell.exe", "-WindowStyle", "Hidden",
+                "-ExecutionPolicy", "Bypass", "-File", str(script_path),
+            ],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _RADAR_SYNC_STARTED = True
+        _log_startup(f"RADAR_SYNC_STARTED script={script_path}")
+    except Exception as exc:
+        message = f"RADAR_SYNC_START_FAILED {exc}"
+        _log_startup(message)
+        print(message, file=sys.stderr)
 
 
 def _redirect_to_project_python() -> None:
@@ -256,6 +284,7 @@ def main() -> int:
         _release_instance_guard(instance_guard)
         return 0
     instance_server = _start_instance_server()
+    _start_radar_sync()
 
     splash = _make_splash()
     app.processEvents()
