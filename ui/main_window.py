@@ -21,6 +21,7 @@ from ui.debug_dialog import DebugInputDialog
 from ui.corner_review_dialog import run_corner_review
 from ui.plc_motion_dialog import PlcMotionDialog, open_plc_manual_console
 from ui.board_data_panel import BoardDataPanel
+from ui.plc_coordinate_dialog import PlcCoordinateDialog
 from ui.theme import is_light_theme, twin_clear_color
 from config.feature_switches import (
     apply_run_profile,
@@ -78,6 +79,7 @@ class MainWindow(QMainWindow):
         self._plc_cmd_queue=[]
         self._latest_plc_batch=[]
         self.plc_dialog=None
+        self.plc_coordinates_dialog=None
         self.motionSnapshot.connect(self._apply_motion_snapshot)
         self.plcCommandReady.connect(self._enqueue_plc_command, Qt.ConnectionType.QueuedConnection)
         self.controller.set_state_listener(self.motionSnapshot.emit)
@@ -90,6 +92,29 @@ class MainWindow(QMainWindow):
         self.resize(min(1920,max(1080,int(screen.width()*0.94))),min(1120,max(700,int(screen.height()*0.92))))
         self.setMinimumSize(1024,680)
         self._build(); self._ensure_plc_dialog(); self._load_plan(); self._apply_ui_mode(); self._refresh(); self._sync_auto_push_policy()
+
+    def _show_plc_coordinates(self):
+        if self.plc_coordinates_dialog is None:
+            self.plc_coordinates_dialog=PlcCoordinateDialog(self)
+        self.plc_coordinates_dialog.data_tabs.setCurrentIndex(0)
+        self.plc_coordinates_dialog.show()
+        self.plc_coordinates_dialog.raise_()
+        self.plc_coordinates_dialog.activateWindow()
+
+    def closeEvent(self, event):
+        dialog=self.plc_coordinates_dialog
+        if dialog is not None and dialog.is_running():
+            # Pending network I/O finishes in its thread before Qt objects are destroyed.
+            if not getattr(self, "_plc_close_pending", False):
+                self._plc_close_pending=True
+                dialog.worker.finished.connect(self._resume_close_after_plc)
+            dialog.stop_reading()
+            event.ignore()
+            return
+        super().closeEvent(event)
+
+    def _resume_close_after_plc(self):
+        QTimer.singleShot(0, self.close)
 
     def _tune_table(self, table: QTableWidget):
         table.setAlternatingRowColors(True)
@@ -338,7 +363,10 @@ class MainWindow(QMainWindow):
         self.auto_push_cb=QCheckBox("自动下发 PLC")
         self.auto_push_cb.setToolTip("勾选且处于自动运行时，算出坐标后经已连接的 PLC 直接写轴。逐步执行请在弹窗里确认下发。")
         self.auto_push_cb.toggled.connect(lambda _=False: self._sync_auto_push_policy())
-        for b in (self.next_btn,self.auto_btn,self.debug_btn,self.offline_check_btn,reset,self.plc_panel_btn,self.plc_manual_btn): controls.addWidget(b)
+        self.plc_live_btn=QPushButton("PLC 实时坐标")
+        self.plc_live_btn.setToolTip("通过 Snap7 只读监视 PLC DB 当前坐标；可配置 DB 编号、字节偏移和类型")
+        self.plc_live_btn.clicked.connect(self._show_plc_coordinates)
+        for b in (self.next_btn,self.auto_btn,self.debug_btn,self.offline_check_btn,reset,self.plc_panel_btn,self.plc_live_btn,self.plc_manual_btn): controls.addWidget(b)
         controls.addWidget(self.auto_push_cb)
         controls.addStretch(1); cl.addWidget(tool,0)
 

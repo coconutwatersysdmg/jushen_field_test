@@ -1,0 +1,40 @@
+{
+  "ip": "10.11.207.100",
+  "port": 102,
+  "rack": 0,
+  "slot": 1,
+  "interval_ms": 200,
+  "truck": {"enabled": true, "db": 112, "offset": 396},
+  "compensation": {
+    "enabled": false,
+    "db": 102,
+    "applied": {"d_AxE1": null, "d_AxE2": null, "d_Ay": null, "d_dx": null, "d_dy": null},
+    "input": {"d_AxE1": null, "d_AxE2": null, "d_Ay": null, "d_dx": null, "d_dy": null}
+  },
+  "axes": {
+    "X": {
+      "enabled": true,
+      "type": "DINT",
+      "db": 18,
+      "offset": 8
+    },
+    "Y": {
+      "enabled": true,
+      "type": "DINT",
+      "db": 18,
+      "offset": 12
+    },
+    "Z": {
+      "enabled": true,
+      "type": "DINT",
+      "db": 18,
+      "offset": 16
+    },
+    "R": {
+      "enabled": true,
+      "type": "DINT",
+      "db": 18,
+      "offset": 20
+    }
+  }
+}
