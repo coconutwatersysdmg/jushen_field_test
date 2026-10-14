@@ -22,7 +22,6 @@ from ui.corner_review_dialog import run_corner_review
 from ui.plc_motion_dialog import PlcMotionDialog, open_plc_manual_console
 from ui.board_data_panel import BoardDataPanel
 from ui.plc_coordinate_dialog import PlcCoordinateDialog
-from ui.network_switch_button import NetworkSwitchButton
 from ui.theme import is_light_theme, twin_clear_color
 from config.feature_switches import (
     apply_run_profile,
@@ -103,10 +102,6 @@ class MainWindow(QMainWindow):
         self.plc_coordinates_dialog.activateWindow()
 
     def closeEvent(self, event):
-        if self.network_switch_btn.is_working():
-            self.statusBar().showMessage("请等待网络操作结束后再关闭；管理员授权窗口可选择取消。", 5000)
-            event.ignore()
-            return
         dialog=self.plc_coordinates_dialog
         if dialog is not None and dialog.is_running():
             # Pending network I/O finishes in its thread before Qt objects are destroyed.
@@ -197,9 +192,6 @@ class MainWindow(QMainWindow):
         self.phase=QLabel("IDLE"); self.phase.setObjectName("phaseLabel"); ops_l.addWidget(self.phase,1)
         self.progress=QLabel("0 / 0"); self.progress.setObjectName("progressLabel"); ops_l.addWidget(self.progress,0)
         top.addWidget(ops,1)
-        self.network_switch_btn=NetworkSwitchButton(self)
-        self.network_switch_btn.busyChanged.connect(lambda _busy: self._update_step_controls())
-        top.addWidget(self.network_switch_btn,0)
         lay.addWidget(top_bar,0)
 
         f,l,self.flow_toggle=self._collapsible_card("流程链路",expanded=False)
@@ -1375,7 +1367,6 @@ class MainWindow(QMainWindow):
         self._refresh()
 
     def _next(self):
-        if self.network_switch_btn.is_switching(): return
         if self._plc_blocks_flow():
             QMessageBox.information(self, "请先处理 PLC 坐标", "请先在 PLC 弹窗中确认下发，或跳过并关闭，再执行下一步。")
             self._show_plc_dialog()
@@ -1407,10 +1398,8 @@ class MainWindow(QMainWindow):
             self.timer.start()
             self.auto_btn.setText("暂停")
             self._sync_auto_push_policy()
-            self._update_step_controls()
 
     def _auto(self):
-        if self.network_switch_btn.is_switching(): return
         if self.timer.isActive():
             self.timer.stop()
             self.auto_btn.setText("自动运行")
@@ -1424,10 +1413,8 @@ class MainWindow(QMainWindow):
             self.timer.start()
             self.auto_btn.setText("暂停")
         self._sync_auto_push_policy()
-        self._update_step_controls()
 
     def _auto_tick(self):
-        if self.network_switch_btn.is_switching(): return
         if self._plc_blocks_flow():
             self._update_step_controls()
             return
@@ -1690,9 +1677,7 @@ class MainWindow(QMainWindow):
 
     def _update_step_controls(self):
         """步骤 RUN 或 PLC 弹窗待处理时，禁止点「执行下一步」。"""
-        switching = self.network_switch_btn.is_switching()
-        self.network_switch_btn.set_flow_busy(self._step_busy or self.timer.isActive() or self._plc_blocks_flow())
-        busy = bool(self._step_busy or switching or self._plc_blocks_flow() or self.controller.finished)
+        busy = bool(self._step_busy or self._plc_blocks_flow() or self.controller.finished)
         if hasattr(self, "next_btn"):
             self.next_btn.setEnabled(not busy)
             if self._is_lab_ui() and self.controller.current_step[0] == "LAB_WAIT_MANUAL_PLACE":
@@ -1701,7 +1686,7 @@ class MainWindow(QMainWindow):
                 self.next_btn.setText("执行下一步")
         if hasattr(self, "auto_btn") and not self.timer.isActive():
             # 自动运行进行中仍可点「暂停」；未在自动跑时若步骤忙则禁止启动自动
-            self.auto_btn.setEnabled(not self._step_busy and not switching and not self.controller.finished)
+            self.auto_btn.setEnabled(not self._step_busy and not self.controller.finished)
 
     def _refresh(self,s=None):
         s=s or self.controller.snapshot(); t=s["twin"]; self.bridge.update_state(t); self._refresh_flow_chain(s)

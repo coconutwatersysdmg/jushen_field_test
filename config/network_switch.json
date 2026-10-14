@@ -1,8 +1,0 @@
-{
-  "interface": "WLAN",
-  "hotspot_profile": "OPPO Find X3",
-  "radar_profile": "ASRS_ZDZC2",
-  "radar_address": "10.11.207.188",
-  "radar_mask": "255.255.255.0",
-  "radar_gateway": "10.11.200.1"
-}
