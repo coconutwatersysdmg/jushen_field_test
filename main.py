@@ -32,6 +32,7 @@ _FAULT_STREAM = None
 _RADAR_SYNC_STARTED = False
 _RADAR_SYNC_PROCESS = None
 _RADAR_SYNC_THREAD = None
+_ITL_CONVERSION_WATCHER = None
 
 
 def _local_python() -> Path | None:
@@ -53,6 +54,23 @@ def _log_startup(message: str) -> None:
             stream.write(f"[{datetime.now().isoformat(timespec='milliseconds')}] pid={os.getpid()} {message}\n")
     except Exception:
         pass
+
+
+def _start_itl_conversion() -> None:
+    """Local conversion is independent of remote sync availability and GUI steps."""
+    global _ITL_CONVERSION_WATCHER
+    try:
+        if (_ITL_CONVERSION_WATCHER is not None and _ITL_CONVERSION_WATCHER.thread is not None
+                and _ITL_CONVERSION_WATCHER.thread.is_alive()):
+            return
+        from services.itl_conversion_service import ItlConversionWatcher
+
+        watcher = ItlConversionWatcher.from_config(log=_log_startup)
+        watcher.start()
+        _ITL_CONVERSION_WATCHER = watcher
+        atexit.register(watcher.stop)
+    except Exception as exc:
+        _log_startup(f"[ITL_CONVERT] 自动转换启动失败：{exc}；仍可手动选择 PCD 运行算法。")
 
 
 def _forward_radar_sync_output(process) -> None:
@@ -334,6 +352,7 @@ def main() -> int:
         _release_instance_guard(instance_guard)
         return 0
     instance_server = _start_instance_server()
+    _start_itl_conversion()
     _start_radar_sync()
 
     splash = _make_splash()

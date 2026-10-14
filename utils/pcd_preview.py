@@ -19,9 +19,11 @@ def load_xyz(pcd_path: str | Path) -> np.ndarray:
 
         pts = np.asarray(load_pcd(str(path)), dtype=np.float64)
     except Exception:
-        import open3d as o3d
+        # Match the algorithm's reader: Open3D supports compressed PCD, but
+        # needs an ASCII temporary path on some Windows builds.
+        from algorithm_modules.point_cloud_segment_module.point_cloud_pipeline import read_point_cloud
 
-        cloud = o3d.io.read_point_cloud(str(path))
+        cloud = read_point_cloud(path)
         pts = np.asarray(cloud.points, dtype=np.float64)
     if pts.ndim != 2 or pts.shape[1] < 3 or pts.size == 0:
         raise RuntimeError(f"PCD 无有效点：{path}")

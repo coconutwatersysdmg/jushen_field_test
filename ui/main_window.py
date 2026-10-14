@@ -352,7 +352,7 @@ class MainWindow(QMainWindow):
         self.auto_btn=QPushButton("自动运行"); self.auto_btn.clicked.connect(self._auto)
         self.debug_btn=QPushButton("调试输入"); self.debug_btn.clicked.connect(self._debug)
         self.select_pcd_btn=QPushButton("选择 PCD")
-        self.select_pcd_btn.setToolTip("选择本次雷达算法使用的 PCD；默认打开项目下的存itl文件夹")
+        self.select_pcd_btn.setToolTip("选择本次雷达算法使用的 PCD；默认打开项目下的 PCD 文件夹")
         self.select_pcd_btn.clicked.connect(self._select_radar_pcd)
         self.offline_check_btn=QPushButton("检查离线路径")
         self.offline_check_btn.setToolTip("检查 config/offline_paths.py：缺文件/路径错误会弹窗说明，不闪退")
@@ -546,8 +546,10 @@ class MainWindow(QMainWindow):
     def _select_radar_pcd(self) -> bool:
         if self._step_busy or self.timer.isActive() or self.controller.running:
             return False
+        pcd_folder = PROJECT_ROOT / "PCD"
+        pcd_folder.mkdir(parents=True, exist_ok=True)
         filename, _ = QFileDialog.getOpenFileName(
-            self, "请选择本次测试的 PCD 文件", str(PROJECT_ROOT / "存itl"),
+            self, "请选择本次测试的 PCD 文件", str(pcd_folder),
             "PCD 点云 (*.pcd *.PCD)",
         )
         if not filename:
@@ -729,7 +731,7 @@ class MainWindow(QMainWindow):
             self.radar_preview.setVisible(False)
             self.radar_preview.setPixmap(QPixmap())
             self.radar_preview_info.setText("离线雷达 PCD · 未配置")
-            self.radar_empty.setText("请点击「选择 PCD」选择本次测试文件\n同步文件保存在项目根目录下的存itl文件夹")
+            self.radar_empty.setText("请点击「选择 PCD」选择本次测试文件\nPCD 文件放在项目根目录的 PCD 文件夹；原始同步文件放在存itl")
             return
 
         try:

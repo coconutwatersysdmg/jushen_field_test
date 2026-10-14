@@ -95,8 +95,9 @@ class RadarOnlyFlowTests(unittest.TestCase):
         window = MainWindow()
         self.addCleanup(window.deleteLater)
         self.addCleanup(window.close)
-        with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(self.pcd), "PCD")):
+        with patch("ui.main_window.QFileDialog.getOpenFileName", return_value=(str(self.pcd), "PCD")) as picker:
             self.assertTrue(window._select_radar_pcd())
+            self.assertEqual(Path(picker.call_args.args[2]).name, "PCD")
         window._reload_offline_debug_inputs()
         self.assertEqual(window.controller.debug_inputs["point_cloud_path"], str(self.pcd.resolve()))
 
