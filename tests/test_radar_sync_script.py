@@ -10,6 +10,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -41,21 +42,54 @@ class RadarSyncScriptTests(unittest.TestCase):
         self.addCleanup(cleanup)
         return process
 
-    def test_copies_all_names_and_types_even_when_timestamps_are_old(self):
+    def test_copies_all_names_and_types_after_cutoff_without_overwriting_existing(self):
         for name in ("点云.PCD", "数据.itl", "任意 [1].txt", "无扩展名"):
             path = self.source / name
             path.write_bytes(name.encode("utf-8"))
-            os.utime(path, (1_600_000_000, 1_600_000_000))
+            timestamp = datetime(2026, 10, 1).timestamp()
+            os.utime(path, (timestamp, timestamp))
         (self.target / "数据.itl").write_text("stale local content", encoding="utf-8")
         process = self.launch()
         output, _ = process.communicate(timeout=15)
         self.assertEqual(process.returncode, 0, output)
         for source in self.source.iterdir():
-            self.assertEqual((self.target / source.name).read_bytes(), source.read_bytes(), output)
+            expected = b"stale local content" if source.name == "数据.itl" else source.read_bytes()
+            self.assertEqual((self.target / source.name).read_bytes(), expected, output)
         self.assertIn("Copied:", output)
         self.assertIn("Scan #1 complete", output)
 
-    def test_file_added_after_start_with_preserved_old_mtime_is_copied(self):
+    def test_capture_date_in_filename_overrides_mtime_and_boundary_is_included(self):
+        cases = {
+            "LaserData-socket1-2025-08-27-13-37-21.itl": (datetime(2026, 10, 15), False),
+            "LaserData-socket1-2026-09-30-23-59-59.itl": (datetime(2026, 10, 15), False),
+            "LaserData-socket1-2026-10-01-00-00-00.itl": (datetime(2025, 1, 1), True),
+            "date-2026-10-15.bin": (datetime(2025, 1, 1), True),
+            "undated-old.txt": (datetime(2026, 9, 30, 23, 59, 59), False),
+            "undated-new.txt": (datetime(2026, 10, 1), True),
+        }
+        for name, (date, _) in cases.items():
+            path = self.source / name
+            path.write_bytes(name.encode("utf-8"))
+            os.utime(path, (date.timestamp(), date.timestamp()))
+        process = self.launch()
+        output, _ = process.communicate(timeout=15)
+        self.assertEqual(process.returncode, 0, output)
+        for name, (_, expected) in cases.items():
+            self.assertEqual((self.target / name).exists(), expected, f"{name}\n{output}")
+        self.assertIn("2026-10-01", output)
+        self.assertIn("before_cutoff=3", output)
+
+    def test_latest_capture_is_copied_first(self):
+        older = "LaserData-2026-10-02-10-00-00.itl"
+        newer = "LaserData-2026-10-15-10-00-00.itl"
+        for name in (older, newer):
+            (self.source / name).write_bytes(b"data")
+        process = self.launch()
+        output, _ = process.communicate(timeout=15)
+        self.assertEqual(process.returncode, 0, output)
+        self.assertLess(output.index(f"Copying: {newer}"), output.index(f"Copying: {older}"))
+
+    def test_file_added_after_start_with_recent_capture_date_and_old_mtime_is_copied(self):
         process = self.launch(scans=5)
         messages = queue.Queue()
         reader = threading.Thread(target=lambda: [messages.put(line) for line in process.stdout], daemon=True)
@@ -69,11 +103,12 @@ class RadarSyncScriptTests(unittest.TestCase):
         fixture = Path(self.folder) / "old-file.txt"
         fixture.write_bytes(b"manually copied with old timestamp")
         os.utime(fixture, (1_500_000_000, 1_500_000_000))
-        shutil.copy2(fixture, self.source / "新文件 [old].anything")
+        name = "新文件-2026-10-15-09-00-00 [old].anything"
+        shutil.copy2(fixture, self.source / name)
         process.wait(timeout=15)
         reader.join(timeout=2)
         self.assertEqual(process.returncode, 0)
-        self.assertEqual((self.target / "新文件 [old].anything").read_bytes(), fixture.read_bytes())
+        self.assertEqual((self.target / name).read_bytes(), fixture.read_bytes())
 
     def test_inaccessible_source_is_reported_and_retried(self):
         process = self.launch(scans=2, source=Path(self.folder) / "missing-share")
