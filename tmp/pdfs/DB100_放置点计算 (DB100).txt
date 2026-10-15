@@ -1,0 +1,2725 @@
+
+--- PAGE 1 ---
+Totally Integrated
+Automation Portal
+智能装车 / 2 线智能装车 / 2 线智能装车-CPU [CPU 1511C-1 PN] / 程序块
+DB100_放置点计算 [DB100]
+DB100_放置点计算 属性
+常规
+名称 DB100_放置点计算 编号 100 类型 DB 语言 DB
+编号 手动
+信息
+标题 作者 注释 系列
+版本 0.1 用户自定义 ID
+DB100_放置点计算
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Static
+Ax DInt 0 False True True True False 车厢计算起始坐标点
+Ay DInt 0 False True True True False 车厢计算起始坐标点
+Az DInt 0 False True True True False 车厢高度(兼容平板/高板/低板)
+Tx DInt 0 False True True True False 托盘长度(沿 X 方向)
+Ty DInt 0 False True True True False 托盘宽度(沿 Y 方向)
+H DInt 0 False True True True False 托盘最高值【应该改动态的】【不叠盘则
+取消】
+Q DInt 0 False True True True False 投影中心到托盘后端距离(货叉根部)
+(视觉叉取点给出)
+S DInt 0 False True True True False 投影中心到托盘前端距离(货叉头部)
+dx DInt 0 False True True True False 托盘 X 轴中间预留缝隙
+dx_鹅颈 DInt 0 False True True True False 托盘 X 轴鹅颈交接中间预留缝隙
+dy DInt 0 False True True True False 托盘 Y 轴中间预留缝隙
+Cx DInt 0 False True True True False X 轴偏置补偿值
+Cy DInt 0 False True True True False Y 轴偏置补偿值【Ay 从中间算后取消】
+Cz DInt 0 False True True True False Z 轴偏置补偿值
+Tx/2 DInt 0 False True True True False 托盘长度(沿 X 方向)/2
+Ty/2 DInt 0 False True True True False 托盘长度(沿 Y 方向)/2
+dy/2 DInt 0 False True True True False 托盘 Y 轴中间预留缝隙/2
+Ex1 DInt 0 False True True True False 考虑雷达长度误差和车尾最后一盘垂
+直激光有效
+Ex2 DInt 0 False True True True False 考虑雷达长度误差和高板最后一盘垂
+直激光必须照到低板
+Place_Z1_平板/高板 DInt 0 False True True True False 放置点通用高度(1 层)
+Place_Z1_低板 DInt 0 False True True True False 放置点通用高度(1 层)
+Place_Z2_平板/高板 DInt 0 False True True True False 放置点通用高度(2 层)
+Place_Z2_低板 DInt 0 False True True True False 放置点通用高度(2 层)
+PlaceRight_R DInt 0 False True True True False 放置点通用角度
+PlaceLeft_R DInt 0 False True True True False 放置点通用角度
+Az_平板/高板 DInt 0 False True True True False 车厢高板高度
+Az_低板 DInt 0 False True True True False 车厢低板高度
+Q_托盘类型误差 DInt 0 False True True True False 根不同的托盘类型，Q 不一样
+高低板前车板比后车板高度数
+值
+DInt 0 False True True True False 【用处不大】
+高低板贴车头码垛鹅颈处与坐
+标 3x 大小
+DInt 0 False True True True False 大于零合法
+高低板空车头返推 Ax 与坐标
+1x 大小
+DInt 0 False True True True False 大于零合法
+i Int 0 False True True True False 循环
+当前放置托盘序号 Int 0 False True True True False
+当前放置托盘序号记忆 Int 0 False True True True False 雷达垛型拍照触发使用
+站台垛型最大放置托盘序号 Int 0 False True True True False
+站台垛型最小放置托盘序号 Int 0 False True True True False
+站台垛型装车总数 Int 0 False True True True False
+PLC 货架表统计的托盘数量 Int 0 False True True True False 【取消】
+已叉取托盘类型 Int 0 False True True True False 站台传递，确定 F\E 点柔性 Z 值
+最长车可放托盘最大列 Int 0 False True True True False
+最长车可放托盘最大列+1 Int 0 False True True True False
+最长车可放托盘最大列*2 Int 0 False True True True False
+最长车可放托盘最大列*2+1 Int 0 False True True True False
+最长车可放托盘最大列*4 Int 0 False True True True False
+当前车可放托盘最大列 Int 0 False True True True False
+当前车可放托盘最大列*2 Int 0 False True True True False
+当前车可放托盘最大列*2+1 Int 0 False True True True False
+当前车可放托盘最大列*2 二层 Int 0 False True True True False
+高板上可放托盘最大列 Int 0 False True True True False
+高板上可放托盘最大列*2 Int 0 False True True True False
+高板上可放托盘最大列*2-1 Int 0 False True True True False
+高板上可放托盘最大列*2+1 Int 0 False True True True False
+高板上可放托盘最大列*2+2 Int 0 False True True True False
+低板上可放托盘最大列 Int 0 False True True True False
+--- PAGE 2 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+雷达计算当前车可放托盘最大
+列
+Real 0.0 False True True True False
+雷达计算高板上可放托盘最大
+列
+Real 0.0 False True True True False
+雷达计算低板上可放托盘最大
+列
+Real 0.0 False True True True False
+初始化雷达与公共数据最大列
+相减阈值
+Real 0.0 False True True True False
+初始化车辆高度上限 Int 0 False True True True False
+初始化车辆高度下限 Int 0 False True True True False
+初始化车辆平板长度上限 Int 0 False True True True False
+初始化车辆平板长度下限 Int 0 False True True True False
+初始化车辆高板长度上限 Int 0 False True True True False
+初始化车辆高板长度下限 Int 0 False True True True False
+初始化车辆低板长度上限 Int 0 False True True True False
+初始化车辆低板长度下限 Int 0 False True True True False
+初始化车辆宽度上限 Int 0 False True True True False
+初始化车辆宽度下限 Int 0 False True True True False
+初始化高低差上限 Int 0 False True True True False
+初始化高低差下限 Int 0 False True True True False
+初始化货叉厚度 DInt 0 False True True True False IN2
+初始化托盘孔洞厚度 DInt 0 False True True True False IN3
+初始化托盘底板厚度 DInt 0 False True True True False IN4
+初始化柔性放货完毕后车被压
+低厚度（补偿）
+DInt 0 False True True True False IN5【可人工调整】值越大龙门在 R 点 Z
+轴降低越多,可能蹭车板
+初始化货叉上表面距离橘黄色
+底面距离
+DInt 0 False True True True False IN6
+初始化 Y 轴雷达角度标定固定
+误差补偿值
+DInt 0 False True True True False 车辆停歪，>0 更靠近驾驶室，即 Y 增
+加
+初始化 Y 轴雷达标定误差固定
+补偿值
+DInt 0 False True True True False >0 更靠近驾驶室，即 Y 增加
+初始化 X 轴雷达标定误差固定
+补偿值
+DInt 0 False True True True False >0 更靠近车头，即 X 增加
+初始化第一列 E1 右侧 X 轴补偿
+值
+DInt 0 False True True True False 解决 Y 轴车平行四边形，>0 更靠近车
+头
+初始化第一列 E2 左侧 X 轴补偿
+值
+DInt 0 False True True True False 解决 Y 轴车平行四边形，>0 更靠近车
+头
+初始化第一列 Y 轴剐蹭前挡板
+机械尺寸
+DInt 0 False True True True False 侧装使用（含安全余量）
+初始化 Y 轴防剐蹭补偿最大值 DInt 0 False True True True False 侧装使用
+第一列 Y 轴防剐蹭向外偏置补
+偿
+DInt 0 False True True True False 侧装使用
+车停歪 Y 轴补偿 DInt 0 False True True True False 车辆停的有角度，根据歪斜和列计算
+站台 F 点固定安全高度补偿 DInt 0 False True True True False F.Z=A.Z+高度补偿
+站台 F 点叠盘是否微动的范围 DInt 0 False True True True False 当前坐标.Z 减 叠盘坐标.Z
+站台 F 点叠盘柔性高度 DInt 0 False True True True False 货物高度+叉取高度 A.Z
+装车 R 点存货是否微动的范围 DInt 0 False True True True False 当前坐标.Z 减 装车坐标.Z
+装车 R 点存货柔性高度 DInt 0 False True True True False 激光值&补偿值&初始化值综合计算
+装车 R 点存货柔性高度-记忆 DInt 0 False True True True False 激光 Z 值不准时适当用上一次的记忆
+值【没写完】
+装车 R 点存货柔性高度_前一周
+期
+DInt 0 False True True True False
+装车 R 点存货柔性高度_两周期
+差值
+DInt 0 False True True True False
+当前车宽度与托盘宽度差 DInt 0 False True True True False 【取消】
+模拟量输入-激光测距 1-Y 轴 DInt 0 False True True True False 【取消】激光测距 1
+模拟量输入-激光测距 2-Y 轴 DInt 0 False True True True False 【无】激光测距 2
+初始化激光安装偏移量 1-Y 轴 DInt 0 False True True True False 【取消】
+初始化激光安装偏移量 2-Y 轴 DInt 0 False True True True False 【无】
+激光测距 Y 轴补偿值车辆右侧 DInt 0 False True True True False 【取消】中间变量
+激光测距 Y 轴补偿值车辆左侧 DInt 0 False True True True False 【取消】中间变量
+激光测距 Y 轴测量记录车辆右
+侧
+DInt 0 False True True True False 【取消】
+激光测距 Y 轴测量记录车辆左
+侧
+DInt 0 False True True True False 【取消】
+触摸屏修改激光测距 Y 轴测量
+记录车辆右侧
+DInt 0 False True True True False 【取消】VS 坐标 2.Y
+触摸屏修改激光测距 Y 轴测量
+记录车辆左侧
+DInt 0 False True True True False 【取消】VS 坐标 1.Y
+测量 Y 轴时 NN 微动触发条件 DInt 0 False True True True False 【取消】坐标 N.Z - 20
+模拟量输入-激光测距 1-Z 轴 DInt 0 False True True True False 激光测距 1
+模拟量输入-激光测距 2-Z 轴 DInt 0 False True True True False 激光测距 3【装车 E1 右排使用】
+模拟量输入-激光测距 3-Z 轴 DInt 0 False True True True False 激光测距 4【装车 E2 左排使用】
+初始化激光安装偏移量 1-Z 轴 DInt 0 False True True True False 龙门 Z 轴尾部
+初始化激光安装偏移量 2-Z 轴 DInt 0 False True True True False 龙门 Z 轴左侧【装车 E1 右排使用】
+初始化激光安装偏移量 3-Z 轴 DInt 0 False True True True False 龙门 Z 轴右侧【装车 E2 左排使用】
+激光测距 Z 轴下表面距地面或
+车高度 1--尾
+DInt 0 False True True True False 龙门 Z 轴尾部
+--- PAGE 3 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+激光测距 Z 轴下表面距地面或
+车高度 2--左
+DInt 0 False True True True False 双手张开与货叉方向一致左手侧【装车
+E1 右排使用】
+激光测距 Z 轴下表面距地面或
+车高度 3--右
+DInt 0 False True True True False 双手张开与货叉方向一致右手侧【装车
+E2 左排使用】
+激光测量车辆 Z 值 1--尾 DInt 0 False True True True False 龙门 Z 轴尾部
+激光测量车辆 Z 值 2--左 DInt 0 False True True True False 双手张开与货叉方向一致左手侧【装车
+E1 右排使用】
+激光测量车辆 Z 值 3--右 DInt 0 False True True True False 双手张开与货叉方向一致右手侧【装车
+E2 左排使用】
+雷达测量的车辆高度上限 DInt 0 False True True True False
+雷达测量的车辆高度下限 DInt 0 False True True True False
+开始计算 Bool false False True True True False
+计算完毕 Bool false False True True True False
+手动转自动后强制垛型校验 Bool false False True True True False
+触摸屏清空放置点坐标和货架
+表和序号
+Bool false False True True True False
+触摸屏清空激光测量车辆 Y 值 Bool false False True True True False
+当前放置托盘序号等于 1 上升
+沿
+Bool false False True True True False
+判断车箱边沿 Y 轴坐标上升沿 Bool false False True True True False
+判断车箱边沿 Y 轴坐标清零上
+升沿
+Bool false False True True True False
+固定路线放置托盘序号标志 Bool false False True True True False 且判断车箱边沿 Y 轴坐标
+判断激光测量车辆 Z 值 1--尾数
+值在车上
+Bool false False True True True False 龙门 Z 轴尾部
+判断激光测量车辆 Z 值 2--左数
+值在车上
+Bool false False True True True False 双手张开与货叉方向一致左手侧【装车
+E1 右排使用】
+判断激光测量车辆 Z 值 3--右数
+值在车上
+Bool false False True True True False 双手张开与货叉方向一致右手侧【装车
+E2 左排使用】
+F 点 Z 轴坐标启用柔性 Bool false False True True True False 1=启用激光值，0=启用输送线安全高
+度
+F 点 Z 轴坐标柔性调整中 Bool false False True True True False
+E 点 D 点 T 点 Z 轴坐标锁定中 Bool false False True True True False E 推导 D 或 T,在 D 点执行 DM,在 T 点
+执行 TQ
+R 点 Z 轴坐标柔性调整中 Bool false False True True True False
+放置点坐标计算失败条件不满
+足
+Bool false False True True True False
+初始化 Y 轴车停歪补偿启用标
+志
+Bool false False True True True False 0 不启用，1 启用
+初始化 Y 轴防剐蹭补偿启用标
+志
+Bool false False True True True False 0 不启用，1 启用
+装车 E 点存货柔性高度-两周期
+差值稳定
+Bool false False True True True False
+人工忽略高低板车头或鹅颈坐
+标有碰撞风险
+Bool false False True True True False
+人工信任拍照点坐标 Bool false False True True True False
+触摸屏启用液压倾角模式 Bool false False True True True False 0 不启用，1 启用
+触摸屏启用液压倾角时在 R 还
+是 E 落下
+Bool false False True True True False 0=R，1=E
+Bool7 Bool false False True True True False
+Bool8 Bool false False True True True False
+Bool9 Bool false False True True True False
+Bool10 Bool false False True True True False
+判断 AxAyAz 合法性 OK Bool false False True True True False
+判断 AxAyAz 合法性 ERROR Bool false False True True True False
+判断雷达数据合法性 OK Bool false False True True True False
+判断雷达数据合法性 ERROR Bool false False True True True False
+判断当前车宽度合法性 OK Bool false False True True True False
+判断当前车宽度合法性 ERROR Bool false False True True True False
+判断当前车可放托盘最大列合
+法性 OK
+Bool false False True True True False
+判断当前车可放托盘最大列合
+法性 ERROR
+Bool false False True True True False
+判断高板上可放托盘最大列合
+法性 OK
+Bool false False True True True False
+判断高板上可放托盘最大列合
+法性 ERROR
+Bool false False True True True False
+判断货架表 PLC 对比 OK Bool false False True True True False
+判断货架表 PLC 对比 ERROR Bool false False True True True False
+判断货架表雷达对比 OK Bool false False True True True False
+判断货架表雷达对比 ERROR Bool false False True True True False
+判断货架表雷达距离校验 OK Bool false False True True True False
+判断货架表雷达距离校验 ER‐
+ROR
+Bool false False True True True False
+判断龙门内部当前放置托盘序
+号 OK
+Bool false False True True True False
+判断龙门内部当前放置托盘序
+号 ERROR
+Bool false False True True True False
+--- PAGE 4 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+判断龙门与地面站当前放置托
+盘序号一样 OK
+Bool false False True True True False
+判断龙门与地面站当前放置托
+盘序号一样 ERROR
+Bool false False True True True False
+判断激光测距 1-Y 轴 OK Bool false False True True True False 【取消】
+判断激光测距 1-Y 轴 ERROR Bool false False True True True False 【取消】
+判断激光测距 2-Y 轴 OK Bool false False True True True False 【无】
+判断激光测距 2-Y 轴 ERROR Bool false False True True True False 【无】
+判断激光测距 1-Z 轴 OK Bool false False True True True False
+判断激光测距 1-Z 轴 ERROR Bool false False True True True False
+判断激光测距 2-Z 轴 OK Bool false False True True True False
+判断激光测距 2-Z 轴 ERROR Bool false False True True True False
+判断激光测距 3-Z 轴 OK Bool false False True True True False
+判断激光测距 3-Z 轴 ERROR Bool false False True True True False
+判断已叉取托盘类型合法性 OK Bool false False True True True False
+判断已叉取托盘类型合法性 ER‐
+ROR
+Bool false False True True True False
+判断站台 F 点叠盘柔性高度补
+偿 OK
+Bool false False True True True False 【取消】
+判断站台 F 点叠盘柔性高度补
+偿 ERROR
+Bool false False True True True False 【取消】
+判断装车 R 点 E 点 D 点 T 点柔
+性高度 OK
+Bool false False True True True False
+判断装车 R 点 E 点 D 点 T 点柔
+性高度 ERROR
+Bool false False True True True False
+判断装车 R 点 E 点 D 点 T 点柔
+性高度记忆 OK
+Bool false False True True True False 【取消】
+判断装车 R 点 E 点 D 点 T 点柔
+性高度记忆 ERROR
+Bool false False True True True False 【取消】
+判断车厢 Y 轴激光和雷达测量
+值偏差 OK 重新计算
+Bool false False True True True False 【取消】
+判断车厢 Y 轴激光和雷达测量
+值偏差 ERROR 报警确认
+Bool false False True True True False 【取消】
+判断托盘货物长度合法性 OK Bool false False True True True False
+判断托盘货物长度合法性 ER‐
+ROR
+Bool false False True True True False
+判断货物超出托盘偏差 OK Bool false False True True True False
+判断货物超出托盘偏差 ERROR Bool false False True True True False
+判断公共数据与雷达尺寸合法
+性 OK
+Bool false False True True True False
+判断公共数据与雷达尺寸合法
+性 ERROR
+Bool false False True True True False
+判断公共数据与雷达最大列数
+合法性 OK
+Bool false False True True True False
+判断公共数据与雷达最大列数
+合法性 ERROR
+Bool false False True True True False
+判断第一列 X 值未超出最大值
+合法性 OK
+Bool false False True True True False
+判断第一列 X 值未超出最大值
+合法性 ERROR
+Bool false False True True True False
+判断高低板车头或鹅颈坐标无
+碰撞风险 OK
+Bool false False True True True False
+判断高低板车头或鹅颈坐标无
+碰撞风险 ERROR
+Bool false False True True True False
+判断有前挡板合法性 OK Bool false False True True True False
+判断有前挡板合法性 ERROR Bool false False True True True False
+Bool54 Bool false False True True True False
+Bool55 Bool false False True True True False
+Bool56 Bool false False True True True False
+Bool57 Bool false False True True True False
+PlaceRight Array[0..30] of
+"放置点坐标 XY"
+False True True True False E1 右排使用
+PlaceRight[0] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[1] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[2] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 5 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+PlaceRight[3] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[4] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[5] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[6] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[7] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[8] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[9] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[10] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[11] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[12] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[13] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[14] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[15] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[16] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 6 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+PlaceRight[17] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[18] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[19] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[20] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[21] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[22] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[23] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[24] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[25] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[26] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[27] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[28] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[29] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceRight[30] "放置点坐标 XY" False True True True False E1 右排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 7 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+PlaceLeft Array[0..30] of
+"放置点坐标 XY"
+False True True True False E2 左排使用
+PlaceLeft[0] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[1] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[2] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[3] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[4] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[5] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[6] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[7] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[8] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[9] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[10] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[11] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[12] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[13] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 8 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[14] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[15] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[16] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[17] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[18] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[19] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[20] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[21] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[22] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[23] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[24] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[25] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[26] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[27] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 9 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[28] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[29] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceLeft[30] "放置点坐标 XY" False True True True False E2 左排使用
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG Array[0..30] of
+"放置点坐标 XY"
+False True True True False
+PlaceKONG[0] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[1] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[2] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[3] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[4] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[5] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[6] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[7] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[8] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[9] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[10] "放置点坐标 XY" False True True True False
+--- PAGE 10 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[11] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[12] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[13] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[14] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[15] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[16] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[17] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[18] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[19] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[20] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[21] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[22] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[23] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[24] "放置点坐标 XY" False True True True False
+--- PAGE 11 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[25] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[26] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[27] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[28] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[29] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+PlaceKONG[30] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 Array[0..60] of
+"放置点坐标 XY"
+False True True True False
+放置托盘点[0] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[1] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[2] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[3] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[4] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[5] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[6] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 12 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+放置托盘点[7] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[8] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[9] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[10] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[11] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[12] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[13] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[14] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[15] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[16] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[17] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[18] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[19] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[20] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 13 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+放置托盘点[21] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[22] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[23] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[24] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[25] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[26] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[27] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[28] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[29] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[30] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[31] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[32] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[33] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[34] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 14 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+放置托盘点[35] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[36] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[37] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[38] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[39] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[40] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[41] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[42] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[43] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[44] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[45] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[46] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[47] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[48] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+--- PAGE 15 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+放置托盘点[49] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[50] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[51] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[52] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[53] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[54] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[55] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[56] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[57] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[58] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[59] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点[60] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG Array[0..60] of
+"放置点坐标 XY"
+False True True True False
+放置托盘点 KONG[0] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[1] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 16 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[2] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[3] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[4] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[5] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[6] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[7] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[8] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[9] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[10] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[11] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[12] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[13] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[14] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[15] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 17 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[16] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[17] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[18] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[19] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[20] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[21] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[22] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[23] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[24] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[25] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[26] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[27] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[28] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[29] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 18 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[30] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[31] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[32] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[33] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[34] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[35] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[36] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[37] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[38] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[39] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[40] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[41] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[42] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[43] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 19 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[44] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[45] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[46] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[47] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[48] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[49] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[50] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[51] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[52] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[53] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[54] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[55] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[56] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[57] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+--- PAGE 20 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[58] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[59] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+放置托盘点 KONG[60] "放置点坐标 XY" False True True True False
+X DInt 0 False True True True False
+Y DInt 0 False True True True False
+Z DInt 0 False True True True False
+R DInt 0 False True True True False
+货架表 Array[0..60] of
+Int
+False True True True False PLC
+货架表[0] Int 0 False True True True False PLC
+货架表[1] Int 0 False True True True False PLC
+货架表[2] Int 0 False True True True False PLC
+货架表[3] Int 0 False True True True False PLC
+货架表[4] Int 0 False True True True False PLC
+货架表[5] Int 0 False True True True False PLC
+货架表[6] Int 0 False True True True False PLC
+货架表[7] Int 0 False True True True False PLC
+货架表[8] Int 0 False True True True False PLC
+货架表[9] Int 0 False True True True False PLC
+货架表[10] Int 0 False True True True False PLC
+货架表[11] Int 0 False True True True False PLC
+货架表[12] Int 0 False True True True False PLC
+货架表[13] Int 0 False True True True False PLC
+货架表[14] Int 0 False True True True False PLC
+货架表[15] Int 0 False True True True False PLC
+货架表[16] Int 0 False True True True False PLC
+货架表[17] Int 0 False True True True False PLC
+货架表[18] Int 0 False True True True False PLC
+货架表[19] Int 0 False True True True False PLC
+货架表[20] Int 0 False True True True False PLC
+货架表[21] Int 0 False True True True False PLC
+货架表[22] Int 0 False True True True False PLC
+货架表[23] Int 0 False True True True False PLC
+货架表[24] Int 0 False True True True False PLC
+货架表[25] Int 0 False True True True False PLC
+货架表[26] Int 0 False True True True False PLC
+货架表[27] Int 0 False True True True False PLC
+货架表[28] Int 0 False True True True False PLC
+货架表[29] Int 0 False True True True False PLC
+货架表[30] Int 0 False True True True False PLC
+货架表[31] Int 0 False True True True False PLC
+货架表[32] Int 0 False True True True False PLC
+货架表[33] Int 0 False True True True False PLC
+货架表[34] Int 0 False True True True False PLC
+货架表[35] Int 0 False True True True False PLC
+货架表[36] Int 0 False True True True False PLC
+货架表[37] Int 0 False True True True False PLC
+货架表[38] Int 0 False True True True False PLC
+货架表[39] Int 0 False True True True False PLC
+货架表[40] Int 0 False True True True False PLC
+货架表[41] Int 0 False True True True False PLC
+货架表[42] Int 0 False True True True False PLC
+货架表[43] Int 0 False True True True False PLC
+货架表[44] Int 0 False True True True False PLC
+货架表[45] Int 0 False True True True False PLC
+货架表[46] Int 0 False True True True False PLC
+货架表[47] Int 0 False True True True False PLC
+货架表[48] Int 0 False True True True False PLC
+货架表[49] Int 0 False True True True False PLC
+货架表[50] Int 0 False True True True False PLC
+货架表[51] Int 0 False True True True False PLC
+货架表[52] Int 0 False True True True False PLC
+货架表[53] Int 0 False True True True False PLC
+--- PAGE 21 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+货架表[54] Int 0 False True True True False PLC
+货架表[55] Int 0 False True True True False PLC
+货架表[56] Int 0 False True True True False PLC
+货架表[57] Int 0 False True True True False PLC
+货架表[58] Int 0 False True True True False PLC
+货架表[59] Int 0 False True True True False PLC
+货架表[60] Int 0 False True True True False PLC
+货架表 KONG Array[0..60] of
+Int
+False True True True False
+货架表 KONG[0] Int 0 False True True True False
+货架表 KONG[1] Int 0 False True True True False
+货架表 KONG[2] Int 0 False True True True False
+货架表 KONG[3] Int 0 False True True True False
+货架表 KONG[4] Int 0 False True True True False
+货架表 KONG[5] Int 0 False True True True False
+货架表 KONG[6] Int 0 False True True True False
+货架表 KONG[7] Int 0 False True True True False
+货架表 KONG[8] Int 0 False True True True False
+货架表 KONG[9] Int 0 False True True True False
+货架表 KONG[10] Int 0 False True True True False
+货架表 KONG[11] Int 0 False True True True False
+货架表 KONG[12] Int 0 False True True True False
+货架表 KONG[13] Int 0 False True True True False
+货架表 KONG[14] Int 0 False True True True False
+货架表 KONG[15] Int 0 False True True True False
+货架表 KONG[16] Int 0 False True True True False
+货架表 KONG[17] Int 0 False True True True False
+货架表 KONG[18] Int 0 False True True True False
+货架表 KONG[19] Int 0 False True True True False
+货架表 KONG[20] Int 0 False True True True False
+货架表 KONG[21] Int 0 False True True True False
+货架表 KONG[22] Int 0 False True True True False
+货架表 KONG[23] Int 0 False True True True False
+货架表 KONG[24] Int 0 False True True True False
+货架表 KONG[25] Int 0 False True True True False
+货架表 KONG[26] Int 0 False True True True False
+货架表 KONG[27] Int 0 False True True True False
+货架表 KONG[28] Int 0 False True True True False
+货架表 KONG[29] Int 0 False True True True False
+货架表 KONG[30] Int 0 False True True True False
+货架表 KONG[31] Int 0 False True True True False
+货架表 KONG[32] Int 0 False True True True False
+货架表 KONG[33] Int 0 False True True True False
+货架表 KONG[34] Int 0 False True True True False
+货架表 KONG[35] Int 0 False True True True False
+货架表 KONG[36] Int 0 False True True True False
+货架表 KONG[37] Int 0 False True True True False
+货架表 KONG[38] Int 0 False True True True False
+货架表 KONG[39] Int 0 False True True True False
+货架表 KONG[40] Int 0 False True True True False
+货架表 KONG[41] Int 0 False True True True False
+货架表 KONG[42] Int 0 False True True True False
+货架表 KONG[43] Int 0 False True True True False
+货架表 KONG[44] Int 0 False True True True False
+货架表 KONG[45] Int 0 False True True True False
+货架表 KONG[46] Int 0 False True True True False
+货架表 KONG[47] Int 0 False True True True False
+货架表 KONG[48] Int 0 False True True True False
+货架表 KONG[49] Int 0 False True True True False
+货架表 KONG[50] Int 0 False True True True False
+货架表 KONG[51] Int 0 False True True True False
+货架表 KONG[52] Int 0 False True True True False
+货架表 KONG[53] Int 0 False True True True False
+货架表 KONG[54] Int 0 False True True True False
+货架表 KONG[55] Int 0 False True True True False
+货架表 KONG[56] Int 0 False True True True False
+货架表 KONG[57] Int 0 False True True True False
+货架表 KONG[58] Int 0 False True True True False
+货架表 KONG[59] Int 0 False True True True False
+货架表 KONG[60] Int 0 False True True True False
+货物尾部与车头距离上限 Array[0..15] of
+DInt
+False True True True False 与雷达测距对比
+货物尾部与车头距离上限[0] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[1] DInt 0 False True True True False 与雷达测距对比
+--- PAGE 22 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+货物尾部与车头距离上限[2] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[3] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[4] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[5] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[6] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[7] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[8] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限[9] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限
+[10]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限
+[11]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限
+[12]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限
+[13]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限
+[14]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离上限
+[15]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限 Array[0..15] of
+DInt
+False True True True False 与雷达测距对比
+货物尾部与车头距离下限[0] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[1] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[2] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[3] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[4] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[5] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[6] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[7] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[8] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限[9] DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限
+[10]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限
+[11]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限
+[12]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限
+[13]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限
+[14]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离下限
+[15]
+DInt 0 False True True True False 与雷达测距对比
+货物尾部与车头距离 KONG Array[0..15] of
+DInt
+False True True True False
+货物尾部与车头距离
+KONG[0]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[1]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[2]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[3]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[4]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[5]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[6]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[7]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[8]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[9]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[10]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[11]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[12]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[13]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[14]
+DInt 0 False True True True False
+货物尾部与车头距离
+KONG[15]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴补
+偿
+Array[0..60] of
+DInt
+False True True True False 侧装、尾装均补偿 X 轴
+--- PAGE 23 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Place_丝包与托盘偏差 X 轴
+补偿[0]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[1]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[2]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[3]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[4]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[5]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[6]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[7]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[8]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[9]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[10]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[11]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[12]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[13]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[14]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[15]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[16]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[17]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[18]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[19]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[20]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[21]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[22]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[23]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[24]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[25]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[26]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[27]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[28]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[29]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[30]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[31]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[32]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[33]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[34]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[35]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[36]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[37]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[38]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[39]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[40]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+--- PAGE 24 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Place_丝包与托盘偏差 X 轴
+补偿[41]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[42]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[43]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[44]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[45]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[46]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[47]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[48]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[49]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[50]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[51]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[52]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[53]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[54]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[55]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[56]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[57]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[58]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[59]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴
+补偿[60]
+DInt 0 False True True True False 侧装、尾装均补偿 X 轴
+Place_丝包与托盘偏差 X 轴补
+偿 KONG
+Array[0..60] of
+DInt
+False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[0]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[1]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[2]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[3]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[4]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[5]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[6]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[7]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[8]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[9]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[10]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[11]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[12]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[13]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[14]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[15]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[16]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[17]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[18]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[19]
+DInt 0 False True True True False
+--- PAGE 25 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[20]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[21]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[22]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[23]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[24]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[25]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[26]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[27]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[28]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[29]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[30]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[31]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[32]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[33]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[34]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[35]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[36]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[37]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[38]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[39]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[40]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[41]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[42]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[43]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[44]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[45]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[46]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[47]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[48]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[49]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[50]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[51]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[52]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[53]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[54]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[55]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[56]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[57]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[58]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[59]
+DInt 0 False True True True False
+Place_丝包与托盘偏差 X 轴
+补偿 KONG[60]
+DInt 0 False True True True False
+--- PAGE 26 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Place_Z 轴记录 Array[0..60] of
+DInt
+False True True True False 记录柔性高度记忆
+Place_Z 轴记录[0] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[1] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[2] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[3] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[4] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[5] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[6] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[7] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[8] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[9] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[10] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[11] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[12] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[13] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[14] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[15] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[16] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[17] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[18] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[19] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[20] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[21] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[22] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[23] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[24] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[25] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[26] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[27] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[28] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[29] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[30] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[31] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[32] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[33] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[34] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[35] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[36] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[37] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[38] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[39] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[40] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[41] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[42] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[43] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[44] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[45] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[46] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[47] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[48] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[49] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[50] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[51] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[52] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[53] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[54] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[55] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[56] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[57] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[58] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[59] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录[60] DInt 0 False True True True False 记录柔性高度记忆
+Place_Z 轴记录 KONG Array[0..60] of
+DInt
+False True True True False
+Place_Z 轴记录 KONG[0] DInt 0 False True True True False
+Place_Z 轴记录 KONG[1] DInt 0 False True True True False
+Place_Z 轴记录 KONG[2] DInt 0 False True True True False
+Place_Z 轴记录 KONG[3] DInt 0 False True True True False
+Place_Z 轴记录 KONG[4] DInt 0 False True True True False
+Place_Z 轴记录 KONG[5] DInt 0 False True True True False
+Place_Z 轴记录 KONG[6] DInt 0 False True True True False
+Place_Z 轴记录 KONG[7] DInt 0 False True True True False
+Place_Z 轴记录 KONG[8] DInt 0 False True True True False
+--- PAGE 27 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+Place_Z 轴记录 KONG[9] DInt 0 False True True True False
+Place_Z 轴记录 KONG[10] DInt 0 False True True True False
+Place_Z 轴记录 KONG[11] DInt 0 False True True True False
+Place_Z 轴记录 KONG[12] DInt 0 False True True True False
+Place_Z 轴记录 KONG[13] DInt 0 False True True True False
+Place_Z 轴记录 KONG[14] DInt 0 False True True True False
+Place_Z 轴记录 KONG[15] DInt 0 False True True True False
+Place_Z 轴记录 KONG[16] DInt 0 False True True True False
+Place_Z 轴记录 KONG[17] DInt 0 False True True True False
+Place_Z 轴记录 KONG[18] DInt 0 False True True True False
+Place_Z 轴记录 KONG[19] DInt 0 False True True True False
+Place_Z 轴记录 KONG[20] DInt 0 False True True True False
+Place_Z 轴记录 KONG[21] DInt 0 False True True True False
+Place_Z 轴记录 KONG[22] DInt 0 False True True True False
+Place_Z 轴记录 KONG[23] DInt 0 False True True True False
+Place_Z 轴记录 KONG[24] DInt 0 False True True True False
+Place_Z 轴记录 KONG[25] DInt 0 False True True True False
+Place_Z 轴记录 KONG[26] DInt 0 False True True True False
+Place_Z 轴记录 KONG[27] DInt 0 False True True True False
+Place_Z 轴记录 KONG[28] DInt 0 False True True True False
+Place_Z 轴记录 KONG[29] DInt 0 False True True True False
+Place_Z 轴记录 KONG[30] DInt 0 False True True True False
+Place_Z 轴记录 KONG[31] DInt 0 False True True True False
+Place_Z 轴记录 KONG[32] DInt 0 False True True True False
+Place_Z 轴记录 KONG[33] DInt 0 False True True True False
+Place_Z 轴记录 KONG[34] DInt 0 False True True True False
+Place_Z 轴记录 KONG[35] DInt 0 False True True True False
+Place_Z 轴记录 KONG[36] DInt 0 False True True True False
+Place_Z 轴记录 KONG[37] DInt 0 False True True True False
+Place_Z 轴记录 KONG[38] DInt 0 False True True True False
+Place_Z 轴记录 KONG[39] DInt 0 False True True True False
+Place_Z 轴记录 KONG[40] DInt 0 False True True True False
+Place_Z 轴记录 KONG[41] DInt 0 False True True True False
+Place_Z 轴记录 KONG[42] DInt 0 False True True True False
+Place_Z 轴记录 KONG[43] DInt 0 False True True True False
+Place_Z 轴记录 KONG[44] DInt 0 False True True True False
+Place_Z 轴记录 KONG[45] DInt 0 False True True True False
+Place_Z 轴记录 KONG[46] DInt 0 False True True True False
+Place_Z 轴记录 KONG[47] DInt 0 False True True True False
+Place_Z 轴记录 KONG[48] DInt 0 False True True True False
+Place_Z 轴记录 KONG[49] DInt 0 False True True True False
+Place_Z 轴记录 KONG[50] DInt 0 False True True True False
+Place_Z 轴记录 KONG[51] DInt 0 False True True True False
+Place_Z 轴记录 KONG[52] DInt 0 False True True True False
+Place_Z 轴记录 KONG[53] DInt 0 False True True True False
+Place_Z 轴记录 KONG[54] DInt 0 False True True True False
+Place_Z 轴记录 KONG[55] DInt 0 False True True True False
+Place_Z 轴记录 KONG[56] DInt 0 False True True True False
+Place_Z 轴记录 KONG[57] DInt 0 False True True True False
+Place_Z 轴记录 KONG[58] DInt 0 False True True True False
+Place_Z 轴记录 KONG[59] DInt 0 False True True True False
+Place_Z 轴记录 KONG[60] DInt 0 False True True True False
+R 点 X 轴偏移 DInt 0 False True True True False 碰撞检测 R 点屏蔽报警
+R 点 Y 轴偏移 DInt 0 False True True True False 碰撞检测 R 点屏蔽报警
+ΔD DInt 0 False True True True False 下层丝包和下层托盘中心左右偏差【转
+向后】【丝包中心线在托盘中心线右侧
+为正】
+D1 DInt 0 False True True True False 下层托盘左右长度【转向后】【程序设定
+值】
+D2 DInt 0 False True True True False 下层丝包左右长度【转向后】【视觉下发
+值】
+ΔD3 DInt 0 False True True True False 下层托盘和下层丝包左表面偏差【转向
+后】【ΔD<0】【ΔD3=ΔD-(D2-D1)/2，小于
+零】
+ΔD4 DInt 0 False True True True False 下层托盘和下层丝包右表面偏差【转向
+后】【ΔD>0】【ΔD4=(D2-D1)/2+ΔD，大
+于零】
+丝包超出托盘左右长度 DInt 0 False True True True False Y 轴正方向为正【适用于丝包大于托
+盘，且丝包左右两侧均超出托盘】
+D11 DInt 0 False True True True False 下层托盘前后长度【转向后】
+D12 DInt 0 False True True True False 下层丝前后长度【转向后】
+D13 DInt 0 False True True True False 上层丝前后长度【转向后】
+ΔD13 DInt 0 False True True True False 上下两拖丝包前表面前后偏差【转向
+后】【上层比下层远离相机为正】【转向
+后】
+--- PAGE 28 ---
+Totally Integrated
+Automation Portal
+名称 数据类型 起始值 保持 从
+HMI/OPC
+UA/Web
+API 可访问
+从
+HMI/
+OPC
+UA/
+Web
+API
+可写
+在 HMI 工
+程组态中可
+见
+设定值 监控 注释
+ΔD14 DInt 0 False True True True False 上下两拖丝包左表面左右偏差【转向
+后】【上层右超出下层为正】【转向后】

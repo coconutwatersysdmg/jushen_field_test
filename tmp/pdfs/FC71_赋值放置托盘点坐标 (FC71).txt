@@ -1,0 +1,59 @@
+
+--- PAGE 1 ---
+Totally Integrated
+Automation Portal
+智能装车 / 2 线智能装车 / 2 线智能装车-CPU [CPU 1511C-1 PN] / 程序块 / 3-不常用程序段
+FC71_赋值放置托盘点坐标 [FC71]
+FC71_赋值放置托盘点坐标 属性
+常规
+名称 FC71_赋值放置托盘点坐标 编号 71 类型 FC 语言 SCL
+编号 手动
+信息
+标题 作者 注释 系列
+版本 0.1 用户自定义 ID
+FC71_赋值放置托盘点坐标
+名称 数据类型 默认值 注释
+Input
+最长车最大列 Int
+Output
+InOut
+Temp
+OK Bool
+ERROR Bool
+i Int
+最长车最大列*2 Int
+Constant
+Return
+FC71_赋值放置托盘点坐标 Void
+0001 #OK := FALSE;
+0002 #ERROR := FALSE;
+0003
+0004
+0005 IF #最长车最大列 < 0 OR #最长车最大列 > 15 THEN   //防止数组溢出
+0006   #ERROR := TRUE;
+0007   GOTO LABLE1;
+0008 END_IF;
+0009
+0010 //将 PlaceRight[1.30]和 PlaceLeft[1.30]数据交替存入放置托盘点[1...60]中
+0011 #"最长车最大列*2" := "DB100_放置点计算".最长车可放托盘最大列 * 2;
+0012
+0013 FOR #i := 1 TO #"最长车最大列*2" DO
+0014   "DB100_放置点计算".放置托盘点[2 * #i - 1] := "DB100_放置点计算".PlaceRight[#i];
+0015   "DB100_放置点计算".放置托盘点[2 * #i] := "DB100_放置点计算".PlaceLeft[#i];
+0016 END_FOR;
+0017
+0018 #OK := TRUE;
+0019 LABLE1:
+0020 RETURN;
+符号 地址 类型 注释
+"DB100_放置点计算".PlaceLeft[*] Block_UDT E2 左排使用
+"DB100_放置点计算".PlaceRight[*] Block_UDT E1 右排使用
+"DB100_放置点计算".放置托盘点[*] Block_UDT
+"DB100_放置点计算".最长车可放托盘
+最大列
+Int
+#"最长车最大列*2" Int
+#ERROR Bool
+#i Int
+#OK Bool
+#最长车最大列 Int

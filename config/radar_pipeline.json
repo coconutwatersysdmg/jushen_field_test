@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "source_share": "\\\\10.11.207.112\\D$\\IN\\点云显示1\\点云显示(1)\\wave",
+  "local_itl_dir": "存itl",
+  "pcd_dir": "pcd",
+  "poll_seconds": 10,
+  "stable_seconds": 3,
+  "sync_existing": false,
+  "converter_command": [],
+  "conversion_timeout_seconds": 120
+}

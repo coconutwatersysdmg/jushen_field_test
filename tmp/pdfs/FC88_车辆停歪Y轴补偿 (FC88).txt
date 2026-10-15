@@ -1,0 +1,91 @@
+
+--- PAGE 1 ---
+Totally Integrated
+Automation Portal
+智能装车 / 2 线智能装车 / 2 线智能装车-CPU [CPU 1511C-1 PN] / 程序块 / 3-不常用程序段
+FC88_车辆停歪 Y 轴补偿 [FC88]
+FC88_车辆停歪 Y 轴补偿 属性
+常规
+名称 FC88_车辆停歪 Y 轴补偿 编号 88 类型 FC 语言 SCL
+编号 手动
+信息
+标题 作者 注释 系列
+版本 0.1 用户自定义 ID
+FC88_车辆停歪 Y 轴补偿
+名称 数据类型 默认值 注释
+Input
+补偿启用标志 Bool
+偏转角度 DInt
+标定固定误差 DInt
+当前列 Int
+Output
+歪斜补偿值 DInt
+InOut
+Temp
+OK Bool
+ERROR Bool
+i Int
+TAN Real
+Constant
+Return
+FC88_车辆停歪 Y 轴补偿 Void
+0001 #OK := FALSE;
+0002 #ERROR := TRUE; //默认 ERROR 是 TRUE
+0003 #歪斜补偿值 := 0;
+0004
+0005 IF #当前列 < 0 OR #当前列 > "DB100_放置点计算".最长车可放托盘最大列 THEN   //防止数组溢出
+0006   #ERROR := TRUE;
+0007   GOTO LABLE1;
+0008 END_IF;
+0009
+0010 IF ABS(#偏转角度 / 1000.0) < 1.0 THEN   //角度太小就不计算了
+0011   #ERROR := TRUE;
+0012   GOTO LABLE1;
+0013 END_IF;
+0014
+0015 #TAN := TAN(#偏转角度 / 1000.0 * 3.1415926 / 180)*(-1);   //按照弧度计算，左正右负与 Y 正方向不符，所以*-1
+0016
+0017 //为了整齐，采用 5 列整体一补偿的思路
+0018 IF #当前列 >= 1 AND #当前列 <= 5 THEN
+0019   #歪斜补偿值 := 0;
+0020 ELSIF #当前列 >= 6 AND #当前列 <= 11 THEN
+0021   #歪斜补偿值 := #TAN * ("DB100_放置点计算".PlaceRight[1].X - "DB100_放置点计算".PlaceRight[6].X) + #标定固定误差;
+0022 ELSIF #当前列 >= 12 AND #当前列 <= 15 THEN
+0023   #歪斜补偿值 := #TAN * ("DB100_放置点计算".PlaceRight[1].X - "DB100_放置点计算".PlaceRight[12].X)  + #标定固定误差;
+0024 END_IF;
+0025
+0026 IF #补偿启用标志 = FALSE THEN   //不启用补偿
+0027   #歪斜补偿值 := 0;
+0028 END_IF;
+0029
+0030 IF #歪斜补偿值 > 100 OR #歪斜补偿值 < -100 THEN   //防止补偿值太异常
+0031   #歪斜补偿值 := 0;
+0032   #ERROR := TRUE;
+0033   GOTO LABLE1;
+0034 END_IF;
+0035
+0036 #ERROR := FALSE;
+0037 #OK := TRUE;
+0038 LABLE1:
+0039 RETURN;
+符号 地址 类型 注释
+"DB100_放置点计算".PlaceRight[1].X DInt
+"DB100_放置点计算".PlaceRight[6].X DInt
+"DB100_放置点计算".Place‐
+Right[12].X
+DInt
+"DB100_放置点计算".最长车可放托盘
+最大列
+Int
+#ERROR Bool
+#OK Bool
+#TAN Real
+#标定固定误差 DInt
+#补偿启用标志 Bool
+#当前列 Int
+--- PAGE 2 ---
+Totally Integrated
+Automation Portal
+符号 地址 类型 注释
+#偏转角度 DInt
+#歪斜补偿值 DInt

@@ -1,0 +1,143 @@
+
+--- PAGE 1 ---
+Totally Integrated
+Automation Portal
+智能装车 / 2 线智能装车 / 2 线智能装车-CPU [CPU 1511C-1 PN] / 程序块 / 3-不常用程序段
+FC74_赋值动态坐标点-码放处尾装 [FC74]
+FC74_赋值动态坐标点-码放处尾装 属性
+常规
+名称 FC74_赋值动态坐标点-码放
+处尾装
+编号 74 类型 FC 语言 SCL
+编号 手动
+信息
+标题 作者 注释 系列
+版本 0.1 用户自定义 ID
+FC74_赋值动态坐标点-码放处尾装
+名称 数据类型 默认值 注释
+Input
+序号 Int
+R 点 X 值偏移量 DInt 协同 Y 轴 45°存货
+R 点 Y 值偏移量 DInt 协同 X 轴 45°存货
+R 点 Z 值偏移量 DInt 存货前高于 E 点 Z 轴的偏移量
+T 点 X 轴偏移量 DInt Ex 与 Tx，放置完毕沿 X 轴后退
+丝包与托盘偏差 X 轴补偿 DInt 侧装、尾装均补偿 X 轴
+Output
+E1 坐标值 "放置点坐标 XY"
+X DInt
+Y DInt
+Z DInt
+R DInt
+E2 坐标值 "放置点坐标 XY"
+X DInt
+Y DInt
+Z DInt
+R DInt
+R1 坐标值 "放置点坐标 XY"
+X DInt
+Y DInt
+Z DInt
+R DInt
+R2 坐标值 "放置点坐标 XY"
+X DInt
+Y DInt
+Z DInt
+R DInt
+T1 坐标值 "放置点坐标 XY"
+X DInt
+Y DInt
+Z DInt
+R DInt
+T2 坐标值 "放置点坐标 XY"
+X DInt
+Y DInt
+Z DInt
+R DInt
+InOut
+Temp
+Constant
+Return
+FC74_赋值动态坐标点-码放处尾装 Void
+0001
+0002 IF #序号 <= 0 OR #序号 >"DB100_放置点计算".最长车可放托盘最大列 * 4 THEN  //防止数组溢出
+0003   GOTO LABEL1;
+0004 END_IF;
+0005
+0006 //45°存货时，X 轴速度/Y 轴速度=X 轴位置/Y 轴位移(N 点 R 点)
+0007 //Z 直偏移量(N 点 R 点)考虑避障雷达探测存货占位
+0008
+0009 IF "DB50_作业数据".装车作业侧 E1 = TRUE AND "DB50_作业数据".装车作业侧 E2 = FALSE THEN   //奇数码放序号，右侧
+0010   #E1 坐标值 := "DB100_放置点计算".放置托盘点[#序号];
+0011   #E1 坐标值.X := "DB100_放置点计算".放置托盘点[#序号].X + #丝包与托盘偏差 X 轴补偿;
+0012   #E2 坐标值 := "DB100_放置点计算".放置托盘点 KONG[#序号];
+0013   
+0014   #R1 坐标值 := #E1 坐标值;
+0015   #R1 坐标值.X := #E1 坐标值.X - #R 点 X 值偏移量;
+0016   #R1 坐标值.Y := #E1 坐标值.Y - #R 点 Y 值偏移量;
+0017   #R1 坐标值.Z := #E1 坐标值.Z + #R 点 Z 值偏移量;
+0018   #R2 坐标值 := "DB100_放置点计算".放置托盘点 KONG[#序号];
+0019     
+0020   #T1 坐标值 := #E1 坐标值;
+0021   #T1 坐标值.X := #E1 坐标值.X - #T 点 X 轴偏移量;
+--- PAGE 2 ---
+Totally Integrated
+Automation Portal
+0022   #T2 坐标值 := "DB100_放置点计算".放置托盘点 KONG[#序号];
+0023 END_IF;
+0024   
+0025 IF "DB50_作业数据".装车作业侧 E1 = FALSE AND "DB50_作业数据".装车作业侧 E2 = TRUE THEN   //奇数码放序号，左侧
+0026   #E2 坐标值 := "DB100_放置点计算".放置托盘点[#序号];
+0027   #E2 坐标值.X := "DB100_放置点计算".放置托盘点[#序号].X + #丝包与托盘偏差 X 轴补偿;
+0028   #E1 坐标值 := "DB100_放置点计算".放置托盘点 KONG[#序号];
+0029   
+0030   #R2 坐标值 := #E2 坐标值;
+0031   #R2 坐标值.X := #E2 坐标值.X - #R 点 X 值偏移量;
+0032   #R2 坐标值.Y := #E2 坐标值.Y + #R 点 Y 值偏移量;
+0033   #R2 坐标值.Z := #E2 坐标值.Z + #R 点 Z 值偏移量;
+0034   #R1 坐标值 := "DB100_放置点计算".放置托盘点 KONG[#序号];
+0035     
+0036   #T2 坐标值 := #E2 坐标值;
+0037   #T2 坐标值.X := #E2 坐标值.X - #T 点 X 轴偏移量;
+0038   #T1 坐标值 := "DB100_放置点计算".放置托盘点 KONG[#序号];
+0039 END_IF;
+0040
+0041 LABEL1: RETURN;
+符号 地址 类型 注释
+"DB50_作业数据".装车作业侧 E1 Bool 右侧 E1 装车。先右侧 E1 后左侧 E2
+"DB50_作业数据".装车作业侧 E2 Bool 左侧 E2 装车。先右侧 E1 后左侧 E2
+"DB100_放置点计算".放置托盘点[*] Block_UDT
+"DB100_放置点计算".放置托盘点
+[*].X
+DInt
+"DB100_放置点计算".放置托盘点
+KONG[*]
+Block_UDT
+"DB100_放置点计算".最长车可放托盘
+最大列
+Int
+#E1 坐标值 Block_UDT
+#E1 坐标值.X DInt
+#E1 坐标值.Y DInt
+#E1 坐标值.Z DInt
+#E2 坐标值 Block_UDT
+#E2 坐标值.X DInt
+#E2 坐标值.Y DInt
+#E2 坐标值.Z DInt
+#R1 坐标值 Block_UDT
+#R1 坐标值.X DInt
+#R1 坐标值.Y DInt
+#R1 坐标值.Z DInt
+#R2 坐标值 Block_UDT
+#R2 坐标值.X DInt
+#R2 坐标值.Y DInt
+#R2 坐标值.Z DInt
+#R 点 X 值偏移量 DInt 协同 Y 轴 45°存货
+#R 点 Y 值偏移量 DInt 协同 X 轴 45°存货
+#R 点 Z 值偏移量 DInt 存货前高于 E 点 Z 轴的偏移量
+#T1 坐标值 Block_UDT
+#T1 坐标值.X DInt
+#T2 坐标值 Block_UDT
+#T2 坐标值.X DInt
+#T 点 X 轴偏移量 DInt Ex 与 Tx，放置完毕沿 X 轴后退
+#丝包与托盘偏差 X 轴补偿 DInt 侧装、尾装均补偿 X 轴
+#序号 Int
