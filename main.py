@@ -4,8 +4,6 @@ from __future__ import annotations
 import faulthandler
 import ctypes
 import os
-import platform
-import subprocess
 import sys
 import time
 import traceback
@@ -27,7 +25,7 @@ FAULT_LOG = PROJECT_ROOT / "logs" / "startup_fault.log"
 INSTANCE_SERVER_NAME = "jushen-field-test-main-window"
 INSTANCE_MUTEX_NAME = "Local\\JushenFieldTestMainWindow"
 _FAULT_STREAM = None
-_RADAR_SYNC_STARTED = False
+_RADAR_PIPELINE = None
 
 
 def _local_python() -> Path | None:
@@ -48,28 +46,27 @@ def _log_startup(message: str) -> None:
 
 
 def _start_radar_sync() -> None:
-    """Start the Windows sync script once without waiting for it to finish."""
-    global _RADAR_SYNC_STARTED
-    if platform.system() != "Windows" or _RADAR_SYNC_STARTED:
+    """Own sync/conversion workers and bridge their output to console and disk."""
+    global _RADAR_PIPELINE
+    if _RADAR_PIPELINE is not None:
         return
     try:
-        script_path = PROJECT_ROOT / "scripts" / "radar_sync.ps1"
-        subprocess.Popen(
-            [
-                "powershell.exe", "-WindowStyle", "Hidden",
-                "-ExecutionPolicy", "Bypass", "-File", str(script_path),
-            ],
-            creationflags=subprocess.CREATE_NO_WINDOW,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        _RADAR_SYNC_STARTED = True
-        _log_startup(f"RADAR_SYNC_STARTED script={script_path}")
+        from services.radar_file_pipeline import RadarFilePipeline
+        _RADAR_PIPELINE = RadarFilePipeline.from_project(PROJECT_ROOT)
+        _RADAR_PIPELINE.start()
+        _log_startup("RADAR_PIPELINE_STARTED")
     except Exception as exc:
+        _stop_radar_sync()
         message = f"RADAR_SYNC_START_FAILED {exc}"
         _log_startup(message)
         print(message, file=sys.stderr)
+
+
+def _stop_radar_sync() -> None:
+    global _RADAR_PIPELINE
+    if _RADAR_PIPELINE is not None:
+        _RADAR_PIPELINE.stop()
+        _RADAR_PIPELINE = None
 
 
 def _redirect_to_project_python() -> None:
@@ -285,11 +282,13 @@ def main() -> int:
         return 0
     instance_server = _start_instance_server()
     _start_radar_sync()
+    app.aboutToQuit.connect(_stop_radar_sync)
 
-    splash = _make_splash()
-    app.processEvents()
-    _log_startup("WINDOW_IMPORT begin")
+    splash = None
     try:
+        splash = _make_splash()
+        app.processEvents()
+        _log_startup("WINDOW_IMPORT begin")
         from ui.main_window import MainWindow
 
         window = MainWindow()
@@ -346,6 +345,9 @@ def main() -> int:
             pass
         _release_instance_guard(instance_guard)
         return 1
+
+    finally:
+        _stop_radar_sync()
 
 
 if __name__ == "__main__":

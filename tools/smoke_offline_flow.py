@@ -65,8 +65,8 @@ def _stub_heavy_algo(ctrl) -> None:
         }
 
     ctrl._radar_task = _fake_radar  # type: ignore[method-assign]
-    ctrl._lab_pick_recognize = _fake_pick  # type: ignore[method-assign]
-    ctrl._lab_corner_shell = _fake_corner_shell  # type: ignore[method-assign]
+    ctrl._field_pick_recognize = _fake_pick  # type: ignore[method-assign]
+    ctrl._field_corner_shell = _fake_corner_shell  # type: ignore[method-assign]
 
 def main() -> int:
     from config.offline_path_check import format_report_text, validate_offline_paths
@@ -125,9 +125,9 @@ def main() -> int:
                 print(f"CONTINUE_FAILED: {exc2}", flush=True)
                 walked.append((code, "stuck"))
                 break
-        if code in {"LAB_PLACE_VERIFY", "RETURN", "DONE"}:
+        if code in {"FIELD_PLACE_VERIFY", "RETURN", "DONE"}:
             # one cycle enough
-            if code == "LAB_PLACE_VERIFY" or ctrl.finished:
+            if code == "FIELD_PLACE_VERIFY" or ctrl.finished:
                 break
 
     print("\n=== WALK SUMMARY ===", flush=True)

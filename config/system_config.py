@@ -21,7 +21,7 @@ import config.feature_switches as feature_switches
 
 SYSTEM_CONFIG: Dict[str, Any] = {
     "runtime": {
-        # 设备模式 / Mock 开关来自 config/feature_switches.py（含三模式）
+        # 设备模式 / Mock 开关来自 config/feature_switches.py（现场离线）
         "device_mode": feature_switches.DEVICE_MODE,
         "allow_demo_device_data": bool(feature_switches.ALLOW_DEMO_DEVICE_DATA),
         "allow_unimplemented_vision_measurement_zero": bool(

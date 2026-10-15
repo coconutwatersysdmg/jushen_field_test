@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from algorithm_modules.lab.fork_hole_lab.fork_hole_locator import locate_fork_holes
+from algorithm_modules.field.fork_hole.fork_hole_locator import locate_fork_holes
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

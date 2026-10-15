@@ -29,7 +29,7 @@ OFFLINE_PATHS: Dict[str, Any] = {
     # TODO【必填】雷达数据所在位置（第2步 PointNet）
     # 示例：r"\\10.11.206.191\share\lidar"
     # ------------------------------------------------------------------
-    "radar_pcd": str(_DEMO / "radar"),
+    "radar_pcd": str(PROJECT_ROOT / "pcd"),
 
     # ------------------------------------------------------------------
     # TODO【必填】海康角点照片文件夹（第3步 角点 YOLO）
@@ -44,6 +44,9 @@ OFFLINE_PATHS: Dict[str, Any] = {
     "mech_rgb": str(_DEMO / "mech"),
     "mech_depth": str(_DEMO / "mech"),
     "mech_cloud": "",
+    # 与插孔 RGB-D 同时记录的 PLC 位姿：x/y/z 为 mm，r 为 deg。
+    # 仅在掌握照片采集时真实位姿后填写；为空时只展示插孔相机坐标。
+    "mech_plc_pose": {},
 
     # ------------------------------------------------------------------
     # TODO【第4步】放货检测用的离线照片文件夹（不再走实验室真机拍照）

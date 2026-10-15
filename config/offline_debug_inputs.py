@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from config.offline_paths import PROJECT_ROOT, get_offline_paths
+from config.radar_input import load_selected_radar_pcd
 from services.offline_pipeline import build_corner_image_map, resolve_path, resolve_place_rgb
 
 
@@ -21,11 +22,15 @@ def _abs(raw: str) -> str:
 
 
 def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """优先用 config/offline_paths.py；空字段保留 base 里的示例（若有）。"""
+    """用户选定 PCD 优先；其余输入来自现场离线配置。"""
     out = deepcopy(base or {})
     cfg = get_offline_paths()
 
-    raw_pcd = str(cfg.get("radar_pcd") or "").strip()
+    selected = str(out.get("selected_radar_pcd") or load_selected_radar_pcd() or "").strip()
+    raw_pcd = selected or str(cfg.get("radar_pcd") or "").strip()
+    out["selected_radar_pcd"] = selected
+    out["point_cloud_path"] = ""
+    out["point_cloud_example_only"] = False
     if raw_pcd:
         try:
             out["point_cloud_path"] = str(resolve_path(raw_pcd, kind="radar_pcd"))
@@ -50,7 +55,7 @@ def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[
     if out.get("pallet_depth"):
         depths["pallet_hole"] = out["pallet_depth"]
 
-    # 第4步：放货检测离线图 → mock 相机 tag（不再走实验室真机拍照）
+    # 第4步：放货检测离线图 → mock 相机 tag（不再走现场真机拍照）
     place_rgb = ""
     place_depth = ""
     raw_place = str(cfg.get("place_verify_dir") or "").strip()
@@ -70,12 +75,12 @@ def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[
     if not place_depth and out.get("pallet_depth"):
         place_depth = str(out.get("pallet_depth") or "")
     if place_rgb:
-        images["lab_place_verify"] = place_rgb
-        images["lab_pre_place_monitor"] = place_rgb
+        images["field_place_verify"] = place_rgb
+        images["field_pre_place_monitor"] = place_rgb
         out["place_verify_rgb"] = place_rgb
     if place_depth:
-        depths["lab_place_verify"] = place_depth
-        depths["lab_pre_place_monitor"] = place_depth
+        depths["field_place_verify"] = place_depth
+        depths["field_pre_place_monitor"] = place_depth
         out["place_verify_depth"] = place_depth
 
     out["images"] = images
@@ -90,6 +95,7 @@ def build_debug_inputs_from_offline(base: Dict[str, Any] | None = None) -> Dict[
     out["hik_corner_dir"] = _abs(str(cfg.get("hik_corner_dir") or ""))
 
     out["offline_field_test"] = True
+    out["offline_plc_pose"] = deepcopy(cfg.get("mech_plc_pose") or {})
     raw_cloud = str(cfg.get("mech_cloud") or "").strip()
     if raw_cloud:
         try:

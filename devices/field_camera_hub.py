@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import socket
+from pathlib import Path
 from typing import Any, Mapping
 
 from core.digital_twin_state import DigitalTwinState
@@ -30,6 +31,7 @@ class FieldCameraHub:
         self.allow_file_inputs = bool(self.config.get("allow_file_inputs", True))
         self.demo_enabled = False
         self.mock_probe = bool(self.config.get("mock_probe", False))
+        self.offline_only = bool(self.config.get("offline_only", self.mock_probe))
 
     def set_demo_enabled(self, enabled: bool):
         self.demo_enabled = bool(enabled)
@@ -197,6 +199,8 @@ class FieldCameraHub:
 
     def capture_rgb(self, camera_id: str, tag: str = "") -> dict:
         path = self.tagged_images.get(str(tag), "")
+        if self.offline_only and not Path(path).is_file():
+            return {"success": False, "device_id": camera_id, "message": f"离线照片不存在：{path or tag}"}
         if path:
             self.twin.update_camera(camera_id, status="ONLINE", task=f"CAPTURE_RGB:{tag}")
             return {
@@ -229,6 +233,8 @@ class FieldCameraHub:
     def capture_rgbd(self, camera_id: str, tag: str = "") -> dict:
         rgb = self.tagged_images.get(str(tag), "")
         depth = self.tagged_depths.get(str(tag), "")
+        if self.offline_only and not (Path(rgb).is_file() and Path(depth).is_file()):
+            return {"success": False, "device_id": camera_id, "message": f"离线 RGB-D 不完整：{rgb or tag} / {depth}"}
         if rgb and depth:
             self.twin.update_camera(camera_id, status="ONLINE", task=f"CAPTURE_RGBD:{tag}")
             return {

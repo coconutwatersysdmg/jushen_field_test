@@ -91,7 +91,8 @@ def _radar_metrics(board: Any) -> Dict[str, float] | None:
 
 
 def _camera_world_corners(round_data: Mapping[str, Any]) -> Mapping[str, Any]:
-    shell = round_data.get("lab_corner_shell")
+    # Retain reads of previously saved snapshots while new runs use field keys.
+    shell = round_data.get("field_corner_shell") or round_data.get("lab_corner_shell")
     if isinstance(shell, Mapping):
         nested = shell.get("camera_world_corners")
         if isinstance(nested, Mapping) and nested:
