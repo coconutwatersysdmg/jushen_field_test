@@ -81,16 +81,32 @@ class BoardDataPanelTests(unittest.TestCase):
 
         first = self.panel.board_tables[0]
         second = self.panel.board_tables[1]
-        self.assertEqual(first.item(0, 1).text(), "6100.125 mm")
-        self.assertEqual(first.item(0, 2).text(), "2380.500 mm")
-        self.assertEqual(first.item(0, 4).text(), "1.250000°")
-        self.assertEqual(first.item(0, 5).text(), "-2.500000°")
-        self.assertEqual(first.item(1, 1).text(), "4004.997 mm")
-        self.assertEqual(first.item(1, 3).text(), "200.000 mm")
-        self.assertEqual(first.item(1, 4).text(), "2.862405°")
+        self.assertEqual(first.item(0, 1).text(), "6100 mm")
+        self.assertEqual(first.item(0, 2).text(), "2381 mm")
+        self.assertEqual(first.item(0, 4).text(), "1°")
+        self.assertEqual(first.item(0, 5).text(), "-3°")
+        self.assertEqual(first.item(1, 1).text(), "4005 mm")
+        self.assertEqual(first.item(1, 3).text(), "200 mm")
+        self.assertEqual(first.item(1, 4).text(), "3°")
         for row in range(2):
             for column in range(1, 6):
                 self.assertEqual(second.item(row, column).text(), "—")
+
+    def test_single_radar_reference_height_is_not_replaced_by_corner_average(self):
+        board = {
+            'coordinate_frame': 'world', 'corner_ids': ['P1', 'P2', 'P3', 'P4'],
+            'corners_xyz_mm': [[0, 0, 1400], [2000, 0, 1400],
+                               [0, -10000, 1600], [2000, -10000, 1600]],
+            'height_mean_mm': 1438.125,
+            'height_estimation': {'method': 'front_five_strip_planes', 'status': 'supported'},
+        }
+        self.panel.update_from_round_data({'radar_result': {'coordinate_frame': 'world', 'boards': [board]}})
+        self.assertEqual(self.panel.board_tables[0].item(0, 3).text(), '1438 mm')
+        board['height_mean_mm'] = None
+        board['height_estimation']['status'] = 'unsupported'
+        self.panel.update_from_round_data({'radar_result': {'coordinate_frame': 'world', 'boards': [board]}})
+        self.assertEqual(self.panel.board_tables[0].item(0, 3).text(), '—')
+        self.assertNotEqual(self.panel.board_tables[0].item(0, 1).text(), '—')
 
     def test_each_metric_header_opens_its_formula_dialog(self):
         expected = {
@@ -143,8 +159,8 @@ class BoardDataPanelTests(unittest.TestCase):
             ["角点", "雷达 X(mm)", "雷达 Y(mm)", "雷达 Z(mm)", "相机 X(mm)", "相机 Y(mm)", "相机 Z(mm)"],
         )
         self.assertEqual(table.item(0, 0).text(), "P1")
-        self.assertEqual([table.item(0, column).text() for column in range(1, 4)], ["101.000", "202.000", "303.000"])
-        self.assertEqual([table.item(0, column).text() for column in range(4, 7)], ["101.500", "202.500", "303.500"])
+        self.assertEqual([table.item(0, column).text() for column in range(1, 4)], ["101", "202", "303"])
+        self.assertEqual([table.item(0, column).text() for column in range(4, 7)], ["102", "203", "304"])
         self.assertEqual([table.item(3, column).text() for column in range(4, 7)], ["—", "—", "—"])
 
     def test_corner_table_has_no_reserved_empty_rows_and_caps_points_at_p8(self):

@@ -61,7 +61,7 @@ class BoardDataMainWindowIntegrationTests(unittest.TestCase):
                 }]}
             }
             window._refresh(snapshot)
-            self.assertEqual(window.board_data_panel.board_tables[0].item(0, 1).text(), "6123.456 mm")
+            self.assertEqual(window.board_data_panel.board_tables[0].item(0, 1).text(), "6123 mm")
             self.assertEqual(window.board_data_panel.board_tables[0].item(1, 1).text(), "—")
         finally:
             window.close()

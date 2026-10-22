@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from services.board_data_service import build_board_data, build_corner_comparison
 from services.sensor_calibration_service import SensorCalibrationService
+from utils.measurement_rounding import round_measurement
 
 
 METRICS = (
@@ -45,8 +46,8 @@ FORMULA_DETAILS: Dict[str, Dict[str, str]] = {
     },
     "height": {
         "title": "平均高度计算说明",
-        "formula": "H = (z1 + z2 + z3 + z4) / 4",
-        "detail": "取四个 WORLD 角点 Z 坐标的算术平均值。\n单位：毫米（mm）。",
+        "formula": "雷达高度A/B/C：H = (h1 + h2 + h3 + h4 + h5) / 5\n雷达高度D：区域整体平面中心Z\n相机及历史结果：H = (z1 + z2 + z3 + z4) / 4",
+        "detail": "软件默认高度方案A。先确定最终底板区域，再裁剪局部选区：单板前60%长度，高板按最终高板区域长度的前80%，低板从P5/P6可装货起点向车尾取本板长度40%；均从近雷达侧起取宽度95%。原高板尾缘未闭合不单独阻止高度计算。各自选区等分五条，A从中心向外稳健拟合平面并剔除异常Z，取五条几何中心高度等权平均。任一条支撑不足则显示—。\n\nB为网格等权重拟合，C为中心邻域中位数，D为所选区域整体平面；可在配置中切换。\n雷达先独立估计本板H，再将该板四个角点Z统一设为H，因此该板角点计算的纵向倾角为0。最终测量结果统一四舍五入为整数。\n相机和没有新高度元数据的历史结果仍用四角Z均值。单位：毫米（mm）。",
     },
     "tilt": {
         "title": "纵向倾斜角计算说明",
@@ -59,6 +60,21 @@ FORMULA_DETAILS: Dict[str, Dict[str, str]] = {
         "detail": "WORLD 坐标系的负 Y 方向为零度基准。\n向正 X 方向偏转为正，向负 X 方向偏转为负。\n单位：度（°）。",
     },
 }
+
+
+def update_radar_world_corner_table(table: QTableWidget, round_data: Mapping[str, Any], calibration) -> None:
+    """右侧雷达表与坐标对照表共用 WORLD 数据源，保留所有雷达角点。"""
+    try:
+        matrix = calibration.fixed_world_matrix("lidar")
+    except (FileNotFoundError, KeyError, TypeError, ValueError):
+        matrix = None
+    rows = [row for row in build_corner_comparison(round_data, matrix) if row.get("radar") is not None]
+    table.setRowCount(len(rows))
+    for index, row in enumerate(rows):
+        point = row["radar"]
+        values = [row["point_id"], *[str(round_measurement(point[axis])) for axis in ("x", "y", "z")], "雷达 WORLD"]
+        for column, value in enumerate(values):
+            table.setItem(index, column, QTableWidgetItem(value))
 
 
 class BoardDataPanel(QWidget):
@@ -193,8 +209,8 @@ class BoardDataPanel(QWidget):
         except (TypeError, ValueError):
             return "—"
         if metric_key.endswith("_deg"):
-            return f"{number:.6f}°"
-        return f"{number:.3f} mm"
+            return f"{round_measurement(number)}°"
+        return f"{round_measurement(number)} mm"
 
     def update_from_round_data(self, round_data: Mapping[str, Any]) -> None:
         boards = build_board_data(round_data, self._lidar_world_matrix)
@@ -214,7 +230,7 @@ class BoardDataPanel(QWidget):
                 point = corner.get(source_key)
                 for axis in ("x", "y", "z"):
                     value = point.get(axis) if isinstance(point, Mapping) else None
-                    values.append("—" if value is None else f"{float(value):.3f}")
+                    values.append("—" if value is None else str(round_measurement(value)))
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -1,6 +1,6 @@
 {
-  "description": "多传感器坐标转换配置（临时初始化参数，后续替换真实标定结果）",
-  "parameter_status": "PLACEHOLDER_ONLY",
+  "description": "多传感器坐标转换配置：雷达已写入现场标定，其他传感器保留现有参数",
+  "parameter_status": "PARTIALLY_CALIBRATED",
   "world_frame": {
     "name": "world",
     "origin": [
@@ -53,27 +53,27 @@
       ]
     },
     "lidar": {
-      "description": "激光雷达坐标系",
+      "description": "激光雷达转 WORLD：绕 Z 旋转 -90.7 度，平移 (13939, 7715, 0) mm",
       "parent": "world",
-      "status": "placeholder",
+      "status": "calibrated",
       "T_world_sensor": [
         [
-          0.966,
+          -0.012217000835247235,
+          0.999925369660452,
           0.0,
-          -0.259,
-          0.0
+          13939.0
         ],
         [
+          -0.999925369660452,
+          -0.012217000835247235,
+          0.0,
+          7715.0
+        ],
+        [
+          0.0,
           0.0,
           1.0,
-          0.0,
-          500.0
-        ],
-        [
-          0.259,
-          0.0,
-          0.966,
-          1800.0
+          0.0
         ],
         [
           0.0,

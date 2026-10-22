@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""功能开关（独立文件，后续新开关也写这里）。
+"""现场离线流程开关；软件仅使用现场文件输入和离线孪生适配器。
 
-推荐：在软件界面顶部切换「运行模式」，会自动套用下面各组开关。
-也可直接改本文件后重启；界面切换优先于文件默认值（会写入 workdir/ui_run_profile.json）。
+历史保存的运行配置会归一化为 field；文件路径请在 offline_paths.py 配置，
+雷达 PCD 也可通过主界面的「选择雷达 PCD」指定。
 """
 from __future__ import annotations
 
@@ -14,11 +14,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROFILE_STATE_FILE = PROJECT_ROOT / "workdir" / "ui_run_profile.json"
 
 # ===========================================================================
-# 运行模式（前端三选一；权威入口）
+# 运行模式（仅现场离线；权威入口）
 # ===========================================================================
-# sim   = 完全模拟：不连外设，Mock + 演示数据，现场算法
-# lab   = 实验室：真机适配器 + 实验室雷达/相机算法
-# field = 完全真实：真机适配器 + 现场 PointNet / corner_service
+# field = 现场离线：文件输入 + 现场 PointNet / corner_service
 RUN_PROFILE = "field"
 # 当前现场任务：只测试雷达 PCD，暂停相机/插孔/放货流程。
 RADAR_ONLY_TEST = True
@@ -28,38 +26,6 @@ def is_radar_only_test() -> bool:
     return RADAR_ONLY_TEST and str(RUN_PROFILE or "").strip().lower() == "field"
 
 RUN_PROFILES: Dict[str, Dict[str, Any]] = {
-    "sim": {
-        "id": "sim",
-        "title": "完全模拟",
-        "subtitle": "不连外设，本地 Mock 跑通全流程",
-        "switches": {
-            "DEVICE_MODE": "mock",
-            "ALLOW_DEMO_DEVICE_DATA": True,
-            "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": True,
-            "ALLOW_REAL_MOTION": False,
-            "USE_LIVE_LIDAR_CAPTURE": False,
-            "CORNER_REVIEW_ENABLED": True,
-            "CORNER_REVIEW_AUTO_ACCEPT_DEMO": True,
-            "USE_LAB_LIDAR_ALGO": False,
-            "USE_LAB_CAMERA_ALGO": False,
-        },
-    },
-    "lab": {
-        "id": "lab",
-        "title": "实验室",
-        "subtitle": "实验室四步：设备检查→插孔∥雷达→相机精定位→俯拍校验；真机+实验室算法",
-        "switches": {
-            "DEVICE_MODE": "real",
-            "ALLOW_DEMO_DEVICE_DATA": False,
-            "ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO": True,
-            "ALLOW_REAL_MOTION": True,
-            "USE_LIVE_LIDAR_CAPTURE": True,
-            "CORNER_REVIEW_ENABLED": False,
-            "CORNER_REVIEW_AUTO_ACCEPT_DEMO": False,
-            "USE_LAB_LIDAR_ALGO": True,
-            "USE_LAB_CAMERA_ALGO": True,
-        },
-    },
     "field": {
         "id": "field",
         "title": "现场离线联调",
@@ -73,8 +39,6 @@ RUN_PROFILES: Dict[str, Dict[str, Any]] = {
             "USE_LIVE_LIDAR_CAPTURE": False,
             "CORNER_REVIEW_ENABLED": True,
             "CORNER_REVIEW_AUTO_ACCEPT_DEMO": False,
-            "USE_LAB_LIDAR_ALGO": False,
-            "USE_LAB_CAMERA_ALGO": False,
         },
     },
 }
@@ -102,11 +66,9 @@ CORNER_REVIEW_ENABLED = True
 CORNER_REVIEW_AUTO_ACCEPT_DEMO = False
 
 # ===========================================================================
-# 4) 实验室 / 现场 算法切换
+# 4) 现场算法
 # ===========================================================================
 
-USE_LAB_LIDAR_ALGO = False
-USE_LAB_CAMERA_ALGO = False
 
 
 def list_run_profiles() -> list[dict[str, Any]]:
@@ -128,12 +90,11 @@ def get_run_profile(profile_id: str | None = None) -> dict[str, Any]:
 
 
 def apply_run_profile(profile_id: str, *, persist: bool = True) -> dict[str, Any]:
-    """套用三模式之一，并同步到本模块与 external_devices 可变字段。"""
+    """套用现场离线配置，并同步到本模块与 external_devices 可变字段。"""
     global RUN_PROFILE
     global DEVICE_MODE, ALLOW_DEMO_DEVICE_DATA, ALLOW_UNIMPLEMENTED_VISION_MEASUREMENT_ZERO
     global ALLOW_REAL_MOTION, USE_LIVE_LIDAR_CAPTURE
     global CORNER_REVIEW_ENABLED, CORNER_REVIEW_AUTO_ACCEPT_DEMO
-    global USE_LAB_LIDAR_ALGO, USE_LAB_CAMERA_ALGO
 
     profile = get_run_profile(profile_id)
     switches = dict(profile.get("switches") or {})
@@ -149,8 +110,6 @@ def apply_run_profile(profile_id: str, *, persist: bool = True) -> dict[str, Any
     CORNER_REVIEW_AUTO_ACCEPT_DEMO = bool(
         switches.get("CORNER_REVIEW_AUTO_ACCEPT_DEMO", CORNER_REVIEW_AUTO_ACCEPT_DEMO)
     )
-    USE_LAB_LIDAR_ALGO = bool(switches.get("USE_LAB_LIDAR_ALGO", USE_LAB_LIDAR_ALGO))
-    USE_LAB_CAMERA_ALGO = bool(switches.get("USE_LAB_CAMERA_ALGO", USE_LAB_CAMERA_ALGO))
 
     # 延迟同步，避免与 external_devices_config 循环导入
     try:
@@ -190,14 +149,12 @@ def apply_run_profile(profile_id: str, *, persist: bool = True) -> dict[str, Any
             "USE_LIVE_LIDAR_CAPTURE": USE_LIVE_LIDAR_CAPTURE,
             "CORNER_REVIEW_ENABLED": CORNER_REVIEW_ENABLED,
             "CORNER_REVIEW_AUTO_ACCEPT_DEMO": CORNER_REVIEW_AUTO_ACCEPT_DEMO,
-            "USE_LAB_LIDAR_ALGO": USE_LAB_LIDAR_ALGO,
-            "USE_LAB_CAMERA_ALGO": USE_LAB_CAMERA_ALGO,
         },
     }
 
 
 def load_persisted_run_profile() -> str:
-    """启动时读取上次界面选择的模式；没有则用本文件 RUN_PROFILE。"""
+    """读取历史保存配置；旧模式均由现场配置入口归一化。"""
     try:
         if PROFILE_STATE_FILE.is_file():
             import json
@@ -211,5 +168,5 @@ def load_persisted_run_profile() -> str:
     return str(RUN_PROFILE or "field")
 
 
-# 导入时套用默认/上次模式（不依赖 external_devices_config）
+# 导入时加载现场配置（兼容历史保存值，不依赖 external_devices_config）
 apply_run_profile(load_persisted_run_profile(), persist=False)

@@ -9,8 +9,7 @@ from uuid import uuid4
 
 from core.geometry import Pose6D
 from core.digital_twin_state import DigitalTwinState
-from utils.demo_assets import ensure_demo_corner_rgbd, ensure_demo_pre_pick_image, ensure_demo_rgb_image
-from .base import PLCAdapter, RobotAdapter, RadarAdapter, ArmCameraAdapter
+from .base import PLCAdapter, RobotAdapter, RadarAdapter
 from .r_axis_hold import RAxisHold
 
 
@@ -187,7 +186,7 @@ class MockRadarAdapter(RadarAdapter):
         if not self.force_success:
             self.twin.update_device("RADAR", status="FAILED", task="LOCATE_FAILED")
             return {"success": False, "message": "雷达找车失败"}
-        configured = str(cargo.get("point_cloud_path") or self.pcd_path or "").strip()
+        configured = str(self.pcd_path or cargo.get("point_cloud_path") or "").strip()
         if configured:
             p = Path(configured).expanduser()
             if p.is_file():
@@ -206,90 +205,5 @@ class MockRadarAdapter(RadarAdapter):
                 msg = f"离线雷达 PCD 读失败：{exc}"
                 print(f"[MockRadar] {msg}", flush=True)
                 return {"success": False, "message": msg, "configured_path": configured}
-        # 无 PCD 时提供4/6点联调数据；这些点只用于相机搜索，不决定最终板型。
-        if int((cargo or {}).get("radar_demo_corner_count", 4) or 4) == 6:
-            return {
-                "success": True, "demo": True, "message": "雷达联调：返回 6 个粗定位角点（仅用于相机搜索）",
-                "coordinate_frame": "world", "coordinate_unit": "mm",
-                "corner_ids": ["P1","P2","P3","P4","P5","P6"],
-                "world_points": {
-                    "P1":{"x":-1250,"y":3000,"z":1650}, "P2":{"x":1250,"y":3000,"z":1650},
-                    "P3":{"x":-1250,"y":7380,"z":1650}, "P4":{"x":1250,"y":7380,"z":1650},
-                    "P5":{"x":-1250,"y":15000,"z":1450}, "P6":{"x":1250,"y":15000,"z":1450}
-                }
-            }
-        return {
-            "success": True, "demo": True, "message": "雷达联调：返回 4 个粗定位角点（仅用于相机搜索）",
-            "coordinate_frame": "world", "coordinate_unit": "mm",
-            "corner_ids": ["P1", "P2", "P3", "P4"],
-            "world_points": {
-                "P1": {"x": -1250, "y": 3000, "z": 1450},
-                "P2": {"x":  1250, "y": 3000, "z": 1450},
-                "P3": {"x": -1250, "y": 15000, "z": 1450},
-                "P4": {"x":  1250, "y": 15000, "z": 1450}
-            }
-        }
-
-
-class MockArmCameraAdapter(ArmCameraAdapter):
-    def __init__(self, twin: DigitalTwinState):
-        self.twin = twin
-        self.inputs = {
-            "CAM_PICK": {"rgb": "", "depth": ""},
-        }
-        self.tagged_images = {}
-        self.tagged_depths = {}
-        self.demo_enabled = False
-
-    def set_demo_enabled(self, enabled: bool):
-        self.demo_enabled = bool(enabled)
-
-    def probe(self) -> dict:
-        self.twin.update_device("CAM_PICK", status="ONLINE", task="MOCK_READY")
-        return {"success": True, "device_id": "CAM_PICK", "message": "Mock 相机就绪"}
-
-    def set_rgbd(self, rgb: str, depth: str):
-        self.inputs["CAM_PICK"] = {"rgb": str(rgb or ""), "depth": str(depth or "")}
-
-    def set_tagged_image(self, tag: str, path: str):
-        self.tagged_images[str(tag)] = str(path or "")
-
-    def set_tagged_depth(self, tag: str, path: str):
-        self.tagged_depths[str(tag)] = str(path or "")
-
-    @staticmethod
-    def _file(path):
-        p = Path(str(path or "")).expanduser()
-        return p.resolve() if p.is_file() else None
-
-    def capture_rgbd(self, camera_id: str, tag: str = "") -> dict:
-        self.twin.update_camera(camera_id, task=f"CAPTURE_RGBD:{tag}", status="CAPTURE")
-        info = self.inputs.get(camera_id, {})
-        rgb = self._file(self.tagged_images.get(str(tag), "")) or self._file(info.get("rgb"))
-        depth = self._file(self.tagged_depths.get(str(tag), "")) or self._file(info.get("depth"))
-        demo = False
-        if self.demo_enabled and (not rgb or not depth) and (
-            str(tag) in {f"P{i}" for i in range(1, 7)} or str(tag) in {"CORNER_TAIL", "CORNER_HEAD"}
-        ):
-            rgb, depth = ensure_demo_corner_rgbd(tag)
-            demo = True
-        return {
-            "success": bool(rgb and depth), "camera_id": camera_id, "tag": tag,
-            "camera_world_pose": self.twin.camera_world_pose(camera_id),
-            "rgb_path": str(rgb) if rgb else "", "depth_path": str(depth) if depth else "",
-            "demo": demo, "source": "generated_demo_rgbd" if demo else "camera_or_debug_input",
-        }
-
-    def capture_rgb(self, camera_id: str, tag: str = "") -> dict:
-        self.twin.update_camera(camera_id, task=f"CAPTURE:{tag}", status="CAPTURE")
-        p = self._file(self.tagged_images.get(str(tag), ""))
-        demo = False
-        if self.demo_enabled and p is None:
-            p = ensure_demo_pre_pick_image() if str(tag) in {"pre_pick_offset", "post_place_offset"} else ensure_demo_rgb_image(tag)
-            demo = True
-        return {
-            "success": bool(p), "camera_id": camera_id, "tag": tag,
-            "camera_world_pose": self.twin.camera_world_pose(camera_id),
-            "image_path": str(p) if p else "",
-            "demo": demo, "source": "generated_demo_image" if demo else "camera_or_debug_input",
-        }
+        self.twin.update_device("RADAR", status="FAILED", task="OFFLINE_PCD_MISSING")
+        return {"success": False, "message": "未选择雷达 PCD，请先选择本地 .pcd 文件"}

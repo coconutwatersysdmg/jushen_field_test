@@ -33,6 +33,7 @@ _RADAR_SYNC_STARTED = False
 _RADAR_SYNC_PROCESS = None
 _RADAR_SYNC_THREAD = None
 _ITL_CONVERSION_WATCHER = None
+_RADAR_PIPELINE = None
 
 
 def _local_python() -> Path | None:
@@ -59,6 +60,9 @@ def _log_startup(message: str) -> None:
 def _start_itl_conversion() -> None:
     """Local conversion is independent of remote sync availability and GUI steps."""
     global _ITL_CONVERSION_WATCHER
+    from config.feature_switches import is_radar_only_test
+    if not is_radar_only_test():
+        return
     try:
         if (_ITL_CONVERSION_WATCHER is not None and _ITL_CONVERSION_WATCHER.thread is not None
                 and _ITL_CONVERSION_WATCHER.thread.is_alive()):
@@ -90,6 +94,7 @@ def _forward_radar_sync_output(process) -> None:
 
 
 def _stop_radar_sync() -> None:
+    _stop_field_radar_pipeline()
     process = _RADAR_SYNC_PROCESS
     if process is not None and process.poll() is None:
         try:
@@ -101,9 +106,30 @@ def _stop_radar_sync() -> None:
         _RADAR_SYNC_THREAD.join(timeout=2)
 
 
+def _start_field_radar_pipeline() -> None:
+    """Own sync/conversion workers and bridge their output to console and disk."""
+    global _RADAR_PIPELINE
+    if _RADAR_PIPELINE is not None:
+        return
+    try:
+        from services.radar_file_pipeline import RadarFilePipeline
+        _RADAR_PIPELINE = RadarFilePipeline.from_project(PROJECT_ROOT)
+        _RADAR_PIPELINE.start()
+        _log_startup("RADAR_PIPELINE_STARTED")
+    except Exception as exc:
+        _stop_field_radar_pipeline()
+        message = f"RADAR_SYNC_START_FAILED {exc}"
+        _log_startup(message)
+        print(message, file=sys.stderr)
+
+
 def _start_radar_sync() -> None:
     """Start the Windows sync script once without waiting for it to finish."""
     global _RADAR_SYNC_STARTED, _RADAR_SYNC_PROCESS, _RADAR_SYNC_THREAD
+    from config.feature_switches import is_radar_only_test
+    if not is_radar_only_test():
+        _start_field_radar_pipeline()
+        return
     if platform.system() != "Windows":
         return
     if _RADAR_SYNC_STARTED and _RADAR_SYNC_PROCESS is not None and _RADAR_SYNC_PROCESS.poll() is None:
@@ -138,6 +164,13 @@ def _start_radar_sync() -> None:
         message = f"RADAR_SYNC_START_FAILED {exc}；不影响选择本地 PCD 和运行雷达算法。"
         _log_startup(message)
         print(message, file=sys.stderr)
+
+
+def _stop_field_radar_pipeline() -> None:
+    global _RADAR_PIPELINE
+    if _RADAR_PIPELINE is not None:
+        _RADAR_PIPELINE.stop()
+        _RADAR_PIPELINE = None
 
 
 def _redirect_to_project_python() -> None:
@@ -354,11 +387,13 @@ def main() -> int:
     instance_server = _start_instance_server()
     _start_itl_conversion()
     _start_radar_sync()
+    app.aboutToQuit.connect(_stop_radar_sync)
 
-    splash = _make_splash()
-    app.processEvents()
-    _log_startup("WINDOW_IMPORT begin")
+    splash = None
     try:
+        splash = _make_splash()
+        app.processEvents()
+        _log_startup("WINDOW_IMPORT begin")
         from ui.main_window import MainWindow
 
         window = MainWindow()
@@ -415,6 +450,9 @@ def main() -> int:
             pass
         _release_instance_guard(instance_guard)
         return 1
+
+    finally:
+        _stop_radar_sync()
 
 
 if __name__ == "__main__":

@@ -2,9 +2,9 @@
 
 Current production flow:
     PCD -> ROI -> voxel downsample -> main-plane removal -> DBSCAN
-    -> statistical filter -> PointNet++ full-cloud inference
-    -> board-plane RANSAC -> PCA/UV slicing -> 4-edge RANSAC
-    -> 3D corners / geometry / attitude -> first-workface loading plan
+    -> statistical filter -> PointNet++ fixed-size direct coverage inference
+    -> board-plane RANSAC -> projected head/near anchors / shared deck boundary
+    -> per-deck H assigned to four corner Z -> WORLD geometry -> loading plan
     -> output/json/<name>.json
 
 Only per-file JSON results are written to disk.
@@ -13,13 +13,19 @@ Only per-file JSON results are written to disk.
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import json
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 import torch
+from utils.measurement_rounding import round_measurement
+
+from .full_coverage_sampling import iter_full_coverage_samples
+from .corner_height import estimate_corner_heights
 
 try:
     import open3d as o3d
@@ -45,14 +51,14 @@ class PipelineConfig:
     # ------------------------------------------------------------------------
     # 1. ROI 裁剪范围（mm）
     # ------------------------------------------------------------------------
-    roi_min: tuple[float, float, float] = (1000.0, -10000.0, -200.0)
-    roi_max: tuple[float, float, float] = (8000.0, 13000.0, 3000.0)
+    roi_min: tuple[float, float, float] = (300.0, -11000.0, -200.0)
+    roi_max: tuple[float, float, float] = (9000.0, 14000.0, 3500.0)
     roi_redundancy: float = 0.025
 
     # ------------------------------------------------------------------------
     # 2. 点云预处理
     # ------------------------------------------------------------------------
-    voxel_size: float = 20.0
+    voxel_size: float = 10.0
 
     # 地面/主平面 RANSAC
     plane_threshold: float = 140.0
@@ -69,11 +75,11 @@ class PipelineConfig:
 
     # ------------------------------------------------------------------------
     # 3. PointNet++
-    # 当前主流程是“整云一次推理”，不做空间分批、重叠或 KNN 恢复。
-    # pointnet_num_point 仍用于 PointNet2Segmenter 初始化/兼容。
+    # 每次固定点数、整车上下文、多次覆盖全部原始点；不做KNN标签恢复。
     # ------------------------------------------------------------------------
     pointnet_num_point: int = 49152
     pointnet_num_votes: int = 1
+    pointnet_context_fraction: float = 0.5
     target_labels: tuple[int, int] = (2, 3)
     seed: int = 42
 
@@ -84,6 +90,28 @@ class PipelineConfig:
     edge_plane_ransac_n: int = 5
     edge_plane_iterations: int = 800
     edge_min_inliers: int = 3000
+    # 仅保留2：高板参考，共方向/共宽/共线；1已移除，拒绝旧配置。
+    geometry_scheme: int = 2
+    corner_height_radii: tuple[float, ...] = (250., 400., 600., 900.)
+    corner_height_min_points: int = 40
+    corner_height_min_tolerance: float = 15.0
+    corner_height_max_tolerance: float = 40.0
+    corner_height_iterations: int = 160
+    corner_height_max_slope: float = 0.5
+
+    # 单板参考高度：前60%长度，近雷达侧起95%宽度，五条带中心平面高度等权平均。
+    # H独立于原角点Z估计，最终统一赋给本板四角。A/B/C/D均保留。
+    height_scheme: str = 'A'
+    single_height_length_fraction: float = 0.6
+    single_height_width_fraction: float = 0.95
+    high_height_length_fraction: float = 0.8
+    low_height_length_fraction: float = 0.4
+    high_low_height_width_fraction: float = 0.95
+    single_height_min_points: int = 40
+    single_height_min_tolerance: float = 15.0
+    single_height_max_tolerance: float = 40.0
+    single_height_iterations: int = 160
+    single_height_max_slope: float = 0.5
 
     # ------------------------------------------------------------------------
     # 5. PCA + 分段切片边缘提取
@@ -106,7 +134,7 @@ class PipelineConfig:
 
     # ------------------------------------------------------------------------
     # 7. 车辆方向定义
-    # 指向车头的大致世界坐标方向，用于固定 Umin = 车头端。
+    # 指向车头的大致雷达坐标方向，用于固定 Umin = 车头端（角点转 WORLD 前）。
     # ------------------------------------------------------------------------
     truck_head_dir: tuple[float, float, float] = (-1.0, 1.0, 0.0)
 
@@ -117,8 +145,25 @@ class PipelineConfig:
     pallet_length_mm: float = 1200.0
     pad_trigger_ratio: float = 0.50
 
+    # Structural evidence remains an explicit trial option until same-height
+    # support-object misses are resolved; the established mode stays available.
+    support_decision_mode: str = 'normal_concentration'
+
+    def __post_init__(self):
+        if self.support_decision_mode not in ('normal_concentration','geometry_evidence','structural_evidence'):
+            raise ValueError('Unsupported support_decision_mode')
+        if self.geometry_scheme != 2:
+            raise ValueError('geometry_scheme only supports 2; scheme 1 has been removed')
+
 
 DEFAULT_CONFIG = PipelineConfig()
+
+# Temporary field correction, applied to the complete post-inference point set.
+LOW_DECK_LABEL_MERGE_THRESHOLD = 30000
+
+# Torch exposes process-global random generators. Serialize this module's
+# seed/use regions so separate pipeline instances cannot interleave them.
+_INFERENCE_RANDOM_LOCK = threading.RLock()
 
 
 def calculate_roi_bounds(
@@ -155,6 +200,61 @@ def require_open3d():
     if o3d is None:
         raise RuntimeError("缺少 open3d，请先在运行环境中安装 open3d。")
     return o3d
+
+
+def _least_squares_plane(points):
+    """Orthogonal least-squares plane, with a canonical coefficient sign."""
+    center = np.mean(points, axis=0)
+    centered = points - center
+    values, vectors = np.linalg.eigh(centered.T @ centered)
+    if values[-1] <= 0 or values[1] <= np.finfo(np.float64).eps * values[-1] * 8:
+        return None  # Coincident or collinear points do not define a plane.
+    normal = vectors[:, 0]
+    if normal[np.argmax(np.abs(normal))] < 0:
+        normal = -normal
+    return np.append(normal, -np.dot(normal, center))
+
+
+def _segment_plane_reproducibly(pcd, *, distance_threshold, ransac_n,
+                                num_iterations, seed):
+    """Fixed RANSAC candidates, sequential scoring and deterministic tie handling.
+
+    Open3D's parallel best-model updates can race even with a fixed seed and
+    full iteration budget when models have equal support and error. Keep our
+    random generator local; score every candidate by support, then mean squared
+    residual, retaining the earlier candidate on exact ties. No physical target
+    dimensions or external reference coordinates participate in this selection.
+    """
+    xyz = np.asarray(pcd.points, dtype=np.float64)
+    order = np.lexsort((xyz[:, 2], xyz[:, 1], xyz[:, 0]))
+    canonical = xyz[order]
+    rng = np.random.default_rng(seed)
+    best_support = None
+    best_score = (0, -np.inf)
+    for _ in range(num_iterations):
+        sample = canonical[rng.choice(len(canonical), ransac_n, replace=False)]
+        candidate = _least_squares_plane(sample)
+        if candidate is None:
+            continue
+        residual = np.abs(canonical[:, 0] * candidate[0]
+                          + canonical[:, 1] * candidate[1]
+                          + canonical[:, 2] * candidate[2] + candidate[3])
+        support = residual < distance_threshold
+        count = int(np.count_nonzero(support))
+        if count < max(3, best_score[0]):
+            continue
+        mean_squared_error = float(np.mean(np.square(residual[support])))
+        score = (count, -mean_squared_error)
+        if score > best_score:
+            best_score = score
+            best_support = support
+    if best_support is None:
+        return np.zeros(4), np.empty(0, dtype=np.int32)
+    model = _least_squares_plane(canonical[best_support])
+    if model is None:
+        return np.zeros(4), np.empty(0, dtype=np.int32)
+    source_inliers = np.sort(order[np.flatnonzero(best_support)])
+    return model, source_inliers.astype(np.int32)
 
 
 def read_point_cloud(path: str | Path):
@@ -232,10 +332,12 @@ def preprocess_point_cloud_timed(pcd, config: PipelineConfig):
         raise ValueError("降采样后点数不足以进行平面拟合")
 
     step_start = time.perf_counter()
-    _, plane_indices = downsampled.segment_plane(
+    _, plane_indices = _segment_plane_reproducibly(
+        downsampled,
         distance_threshold=config.plane_threshold,
         ransac_n=config.plane_ransac_n,
         num_iterations=config.plane_iterations,
+        seed=config.seed,
     )
     timings["ground_plane_ransac_s"] = time.perf_counter() - step_start
 
@@ -301,10 +403,12 @@ def fit_plane_once(points, config: PipelineConfig):
     backend = require_open3d()
     pcd = backend.geometry.PointCloud()
     pcd.points = backend.utility.Vector3dVector(np.asarray(points, dtype=np.float64))
-    plane_model, inliers = pcd.segment_plane(
+    plane_model, inliers = _segment_plane_reproducibly(
+        pcd,
         distance_threshold=config.edge_plane_distance,
         ransac_n=config.edge_plane_ransac_n,
         num_iterations=config.edge_plane_iterations,
+        seed=config.seed + 1,
     )
     return plane_model, np.asarray(inliers, dtype=np.int32)
 
@@ -554,12 +658,29 @@ def extract_edge_candidates_2d(uv, config: PipelineConfig):
     }
 
 
+def radar_to_world(points):
+    """提取角点后将雷达 XYZ(mm) 转到固定 WORLD；不改变点序和高度。"""
+    points = np.asarray(points, dtype=np.float64)
+    angle = np.deg2rad(-90.7)
+    c = np.cos(angle)
+    s = np.sin(angle)
+    x = points[:, 0]
+    y = points[:, 1]
+    z = points[:, 2]
+    world_x = x * c - y * s + 13939
+    world_y = x * s + y * c + 7715
+    world_z = z
+    return np.column_stack((world_x, world_y, world_z))
+
+
 def compute_geometry_result(corners_3d, corner_start: int = 1):
-    """计算长度、宽度、平均高度、纵向倾斜角和水平偏移角。"""
+    """将提取的雷达角点转到 WORLD，再计算尺寸、高度及姿态。"""
 
     corners = np.asarray(corners_3d, dtype=np.float64)
     if corners.shape != (4, 3):
         raise ValueError(f"corners_3d 必须为 [4,3]，当前为 {corners.shape}")
+    radar_corners = corners
+    corners = radar_to_world(radar_corners)
 
     p1, p2, p3, p4 = corners
 
@@ -597,18 +718,21 @@ def compute_geometry_result(corners_3d, corner_start: int = 1):
 
     corner_ids = [f"P{corner_start + i}" for i in range(4)]
     corners_rounded = [
-        [round(float(value), 3) for value in point]
+        [round_measurement(float(value)) for value in point]
         for point in corners
     ]
 
     return {
+        "coordinate_frame": "world",
+        "coordinate_unit": "mm",
         "corner_ids": corner_ids,
         "corners_xyz_mm": corners_rounded,
-        "length_mm": round(float(length_mm), 3),
-        "width_mm": round(float(width_mm), 3),
-        "height_mean_mm": round(float(np.mean(corners[:, 2])), 3),
-        "tilt_angle_deg": round(float(tilt_angle_deg), 6),
-        "offset_angle_deg": round(float(offset_angle_deg), 6),
+        "radar_corners_xyz_mm": [[round_measurement(float(value)) for value in point] for point in radar_corners],
+        "length_mm": round_measurement(float(length_mm)),
+        "width_mm": round_measurement(float(width_mm)),
+        "height_mean_mm": round_measurement(float(np.mean(corners[:, 2]))),
+        "tilt_angle_deg": round_measurement(float(tilt_angle_deg)),
+        "offset_angle_deg": round_measurement(float(offset_angle_deg)),
     }
 
 
@@ -652,136 +776,145 @@ def compute_first_workface_loading_plan(
         final_pallet_count = normal_pallet_count
 
     return {
-        "pallet_length_mm": round(pallet_length_mm, 3),
+        "pallet_length_mm": round_measurement(pallet_length_mm),
         "normal_pallet_count": normal_pallet_count,
-        "remaining_length_mm": round(float(remaining_length_mm), 3),
+        "remaining_length_mm": round_measurement(float(remaining_length_mm)),
         "remaining_ratio": round(float(remaining_ratio), 6),
         "pad_trigger_ratio": round(float(pad_trigger_ratio), 6),
         "pad_required": pad_required,
-        "remaining_workface_compensation_mm": round(float(compensation_mm), 3),
+        "remaining_workface_compensation_mm": round_measurement(float(compensation_mm)),
         "final_pallet_count": final_pallet_count,
     }
 
 
-def process_one_label_timed(
-    points,
-    label_id,
-    config: PipelineConfig,
-    corner_start: int = 1,
-):
-    rows = []
-    label_name = f"label_{label_id}"
-    total_start = time.perf_counter()
 
-    step_start = time.perf_counter()
-    plane_model, inliers = fit_plane_once(points, config)
-    rows.append((label_name, "平面RANSAC拟合", time.perf_counter() - step_start))
-
-    if plane_model is None or inliers is None or len(inliers) < config.edge_min_inliers:
-        rows.append((label_name, "该标签总耗时", time.perf_counter() - total_start))
-        return None, rows
-
-    plane_points = np.asarray(points)[inliers]
-
-    step_start = time.perf_counter()
-    pca_info = compute_pca_info(
-        plane_points,
-        plane_model,
-        config.truck_head_dir,
-    )
-    rows.append((label_name, "PCA局部坐标系", time.perf_counter() - step_start))
-
-    step_start = time.perf_counter()
-    u, v, _ = project_points_to_uvn(plane_points, pca_info)
-    uv = np.column_stack((u, v))
-    rows.append((label_name, "UV投影", time.perf_counter() - step_start))
-
-    step_start = time.perf_counter()
-    edge_candidates = extract_edge_candidates_2d(uv, config)
-    rows.append((label_name, "分段切片与边缘候选提取", time.perf_counter() - step_start))
-
-    step_start = time.perf_counter()
-    lines = {}
-    rng = np.random.default_rng(config.seed + int(label_id))
-    for edge_name in ("v_min", "v_max", "u_min", "u_max"):
-        lines[edge_name] = ransac_fit_line_2d(
-            edge_candidates[edge_name],
-            config,
-            rng,
-        )
-    rows.append((label_name, "四边RANSAC直线拟合", time.perf_counter() - step_start))
-
-    step_start = time.perf_counter()
-    corners_3d = None
-    if all(lines[name] is not None for name in ("v_min", "v_max", "u_min", "u_max")):
-        intersections = [
-            line_intersection(lines["u_min"], lines["v_min"]),
-            line_intersection(lines["u_min"], lines["v_max"]),
-            line_intersection(lines["u_max"], lines["v_min"]),
-            line_intersection(lines["u_max"], lines["v_max"]),
-        ]
-        if all(point is not None for point in intersections):
-            corners_3d = np.asarray(
-                [uv_to_3d(point[0], point[1], pca_info) for point in intersections],
-                dtype=np.float64,
-            )
-    rows.append((label_name, "直线求交与3D角点恢复", time.perf_counter() - step_start))
-
-    step_start = time.perf_counter()
-    geometry_result = (
-        None
-        if corners_3d is None
-        else compute_geometry_result(corners_3d, corner_start=corner_start)
-    )
-    rows.append((label_name, "尺寸/高度/倾斜角/偏移角计算", time.perf_counter() - step_start))
-    rows.append((label_name, "该标签总耗时", time.perf_counter() - total_start))
-    return geometry_result, rows
+def _withhold_corner_z(board, report):
+    """Keep XY diagnostics without publishing an invented corner height."""
+    radar = np.asarray(board.get('global_plane_radar_corners_xyz_mm') or
+                       board.get('radar_corners_xyz_mm') or [], float)
+    if radar.shape == (4, 3):
+        xy_geometry = radar.copy()
+        xy_geometry[:, 2] = 0.
+        metrics = compute_geometry_result(xy_geometry, 1)
+        for key in ('length_mm', 'width_mm', 'tilt_angle_deg', 'offset_angle_deg'):
+            board[key] = metrics[key]
+    board['available_xy_corners_radar_mm'] = radar[:, :2].tolist() if radar.shape == (4, 3) else []
+    board['corners_xyz_mm'] = []
+    board['radar_corners_xyz_mm'] = []
+    board['height_mean_mm'] = None
+    board['corner_height_mean_mm'] = None
+    board['corner_height_all_supported'] = False
+    board['corner_height_estimation'] = [dict(status='height_unavailable', reason=report.get('reason')) for _ in range(4)]
+    board.pop('loading_plan', None)
 
 
-def process_segmented_points_timed(
-    xyz,
-    labels,
-    config: PipelineConfig,
-):
-    total_start = time.perf_counter()
-    xyz = np.asarray(xyz, dtype=np.float32)
-    labels = np.asarray(labels, dtype=np.int32)
-    if xyz.shape != (labels.size, 3):
-        raise ValueError(f"分割数据形状不一致：xyz={xyz.shape}, labels={labels.shape}")
+def merge_sparse_low_deck_labels(labels):
+    """Merge fewer than 30000 label-3 points into label 2 without changing the source."""
+    corrected = np.asarray(labels).copy()
+    low_mask = corrected == 3
+    low_count = int(np.count_nonzero(low_mask))
+    high_count = int(np.count_nonzero(corrected == 2))
+    applied = 0 < low_count < LOW_DECK_LABEL_MERGE_THRESHOLD
+    if applied:
+        corrected[low_mask] = 2
+    return corrected, dict(rule='sparse_label_3_to_label_2',
+        threshold_points=LOW_DECK_LABEL_MERGE_THRESHOLD, applied=applied,
+        merged_points=low_count if applied else 0,
+        label_2_points_before=high_count, label_2_points_after=high_count+(low_count if applied else 0),
+        label_3_points_before=low_count, label_3_points_after=0 if applied else low_count)
 
-    result = {}
-    rows = []
-    detected_board_count = 0
 
-    for label_id in config.target_labels:
-        label_name = f"label_{label_id}"
-        label_points = xyz[labels == label_id]
-        if len(label_points) == 0:
-            result[label_name] = None
-            continue
-
-        corner_start = detected_board_count * 4 + 1
-        label_result, label_rows = process_one_label_timed(
-            label_points,
-            label_id,
-            config,
-            corner_start=corner_start,
-        )
-        result[label_name] = label_result
-        rows.extend(label_rows)
-
-        if label_result is not None:
-            detected_board_count += 1
-
-    # 只有两块底板都成功时，才对 label_2 计算第一作业面装载规划。
-    if result.get("label_2") is not None and result.get("label_3") is not None:
-        result["label_2"]["loading_plan"] = compute_first_workface_loading_plan(
-            result["label_2"]["length_mm"],
-            pallet_length_mm=config.pallet_length_mm,
-            pad_trigger_ratio=config.pad_trigger_ratio,
-        )
-
-    return result, rows, time.perf_counter() - total_start
+def process_segmented_points_timed(xyz, labels, config: PipelineConfig):
+    if config.height_scheme not in ('A', 'B', 'C', 'D'):
+        raise ValueError('height_scheme must be A, B, C, or D')
+    if config.geometry_scheme != 2:
+        raise ValueError('geometry_scheme only supports 2; scheme 1 has been removed')
+    labels, label_correction = merge_sparse_low_deck_labels(labels)
+    from .shared_deck_geometry import process_shared_decks_timed
+    result, rows, seconds = process_shared_decks_timed(xyz, labels, config)
+    result['label_correction'] = label_correction
+    # An unsuccessful paired-deck fit does not establish a single-board truck.
+    # Preserve available corners, but defer H until the board type is supported.
+    if result.get('geometry_status') == 'partial':
+        for label_name in ('label_2', 'label_3'):
+            board = result.get(label_name)
+            if isinstance(board, dict):
+                board['height_estimation'] = dict(
+                    height_scheme=config.height_scheme, method='geometry_incomplete',
+                    status='geometry_incomplete', height_mm=None,
+                    reason='board_type_not_confirmed_after_geometry_failure')
+                _withhold_corner_z(board, board['height_estimation'])
+        return result, rows, seconds
+    has_high = isinstance(result.get('label_2'), dict)
+    has_low = isinstance(result.get('label_3'), dict)
+    if has_high and has_low:
+        height_targets = [('label_2', 2, 'high', config.high_height_length_fraction, config.high_low_height_width_fraction),
+                          ('label_3', 3, 'low', config.low_height_length_fraction, config.high_low_height_width_fraction)]
+    elif has_high:
+        height_targets = [('label_2', 2, 'single', config.single_height_length_fraction, config.single_height_width_fraction)]
+    else:
+        height_targets = []
+    for label_name, label_id, role, fraction, width in height_targets:
+        from .deck_height_methods import estimate_deck_height
+        board = result[label_name]
+        start = time.perf_counter()
+        source_corners = board.get('height_source_radar_corners_xyz_mm', board['radar_corners_xyz_mm'])
+        if source_corners is None:
+            report = dict(height_scheme=config.height_scheme, method='front_five_strip_planes',
+                          status='unsupported', height_mm=None, reason='final_height_crop_unavailable',
+                          length_fraction=fraction, width_fraction=width, strips=[])
+        else:
+            report = estimate_deck_height(
+                np.asarray(xyz)[np.asarray(labels) == label_id], source_corners,
+                scheme=config.height_scheme, length_fraction=fraction, width_fraction=width,
+                min_points=config.single_height_min_points,
+                min_tolerance=config.single_height_min_tolerance,
+                max_tolerance=config.single_height_max_tolerance,
+                iterations=config.single_height_iterations,
+                max_slope=config.single_height_max_slope, seed=config.seed)
+        # World conversion is yaw + XY translation: Z is unchanged.
+        plane_corners = board.get('global_plane_radar_corners_xyz_mm')
+        board['geometry_plane_height_mean_mm'] = (float(np.mean(np.asarray(plane_corners, float)[:, 2]))
+            if plane_corners is not None else board['height_mean_mm'])
+        report.update(board_role=role, crop_start='P5_P6_low_usable_start' if role == 'low' else 'this_deck_head',
+                      height_reference='deck_region_reference', selection_basis='existing_successful_geometry_board_count',
+                      length_fraction_of='this_deck', crop_start_corner_ids=board['corner_ids'][:2],
+                      width_start='P5_P7_near_scanner_side' if role == 'low' else 'P1_P3_near_scanner_side')
+        board['height_estimation'] = report
+        report['height_crop_basis'] = 'final_this_deck_geometry'
+        if report['status'] == 'supported' and report['height_mm'] is not None:
+            height = round_measurement(float(report['height_mm']))
+            # Never feed rounded published XY back into fitting or WORLD conversion.
+            flat_corners = np.asarray(board.get('global_plane_radar_corners_xyz_mm',
+                                                board['radar_corners_xyz_mm']), float).copy()
+            flat_corners[:, 2] = height
+            board.update(compute_geometry_result(flat_corners, 5 if label_id == 3 else 1))
+            board['corner_height_mean_mm'] = height
+            board['corner_height_all_supported'] = True
+            board['corner_height_estimation'] = [dict(status='deck_reference_height', height_mm=height,
+                height_scheme=config.height_scheme, used_local_corner_fit=False) for _ in range(4)]
+            report['height_mm'] = height
+            for strip in report.get('strips', []):
+                if strip.get('height_mm') is not None:
+                    strip['height_mm'] = round_measurement(strip['height_mm'])
+        else:
+            _withhold_corner_z(board, report)
+            result['geometry_status'] = 'partial'
+            result.setdefault('geometry_failures', []).append(dict(board_label=label_name,
+                reason='height_reference_unavailable:'+str(report.get('reason', 'unsupported'))))
+        elapsed = time.perf_counter() - start
+        rows.append((label_name, f'底板参考高度{config.height_scheme}', elapsed))
+        seconds += elapsed
+    if has_high and has_low and result.get('geometry_status') != 'partial':
+        high_board = result['label_2']
+        plan_length = high_board['length_mm']
+        raw_corners = high_board.get('global_plane_radar_corners_xyz_mm')
+        if raw_corners is not None:
+            xy = np.asarray(raw_corners, float)[:, :2]
+            plan_length = float((np.linalg.norm(xy[2]-xy[0]) + np.linalg.norm(xy[3]-xy[1]))/2)
+        result['label_2']['loading_plan'] = compute_first_workface_loading_plan(
+            plan_length, config.pallet_length_mm, config.pad_trigger_ratio)
+    return result, rows, seconds
 
 
 class PointCloudPipeline:
@@ -809,23 +942,20 @@ class PointCloudPipeline:
         )
 
     def segment_xyz_full_coverage(self, xyz):
-        """全部过滤后点一次送入 PointNet++；无分批、无重叠、无 KNN。"""
+        """Fixed-size full-truck groups; every retained point is directly predicted."""
 
         dense_xyz = np.asarray(xyz, dtype=np.float32)
-        if dense_xyz.ndim != 2 or dense_xyz.shape[1] != 3 or len(dense_xyz) == 0:
+        if dense_xyz.ndim != 2 or dense_xyz.shape[1] != 3 or len(dense_xyz) == 0 or not np.isfinite(dense_xyz).all():
             raise ValueError(f"整云推理输入必须为非空 [N,3]，当前为 {dense_xyz.shape}")
 
         dense_count = int(len(dense_xyz))
 
         prepare_start = time.perf_counter()
-        normalized_xyz = pc_normalize(dense_xyz.copy())
-        points = (
-            torch.from_numpy(normalized_xyz)
-            .float()
-            .unsqueeze(0)
-            .to(self.segmenter.device)
-            .transpose(2, 1)
-        )
+        # Canonicalize once for repeatability; each sampled group is shuffled.
+        # Training normalizes the complete cloud before selecting points.
+        canonical_order = np.lexsort((dense_xyz[:, 2], dense_xyz[:, 1], dense_xyz[:, 0]))
+        canonical_xyz = dense_xyz[canonical_order].copy()
+        normalized_xyz = pc_normalize(canonical_xyz.copy())
         cls_label = torch.zeros((1, 1), dtype=torch.long, device=self.segmenter.device)
         cls_one_hot = torch.eye(
             DEFAULT_NUM_CLASSES,
@@ -835,40 +965,64 @@ class PointCloudPipeline:
 
         inference_start = time.perf_counter()
         vote_count = max(int(self.segmenter.num_votes), 1)
-        vote_pool = torch.zeros(
-            (1, dense_count, DEFAULT_NUM_PART),
-            dtype=torch.float32,
-            device=self.segmenter.device,
-        )
+        probability_sum = np.zeros((dense_count, DEFAULT_NUM_PART), dtype=np.float64)
+        coverage = np.zeros(dense_count, dtype=np.int64)
+        group_count = 0
+        group_points = int(self.config.pointnet_num_point)
 
+        device = torch.device(self.segmenter.device)
+        cuda_devices = (
+            [device.index if device.index is not None else torch.cuda.current_device()]
+            if device.type == "cuda" else []
+        )
+        backend_flags = (
+            torch.backends.cudnn.flags(benchmark=False, deterministic=True)
+            if cuda_devices else nullcontext()
+        )
         try:
-            with torch.inference_mode():
-                for _ in range(vote_count):
-                    seg_pred, _ = self.segmenter.model(points, cls_one_hot)
-                    if tuple(seg_pred.shape) != tuple(vote_pool.shape):
-                        raise ValueError(
-                            "PointNet++ 整云输出形状与输入点数不一致："
-                            f"expected={tuple(vote_pool.shape)}, actual={tuple(seg_pred.shape)}"
-                        )
-                    vote_pool += seg_pred
+            with _INFERENCE_RANDOM_LOCK, torch.random.fork_rng(devices=cuda_devices), backend_flags, torch.inference_mode():
+                torch.random.default_generator.manual_seed(self.config.seed)
+                if cuda_devices:
+                    with torch.cuda.device(cuda_devices[0]):
+                        torch.cuda.manual_seed(self.config.seed)
+                self.segmenter.model.eval()
+                for indices in iter_full_coverage_samples(
+                    canonical_xyz, group_points, self.config.seed,
+                    self.config.pointnet_context_fraction,
+                ):
+                    points = torch.from_numpy(normalized_xyz[indices]).float().unsqueeze(0).to(self.segmenter.device).transpose(2, 1)
+                    for _ in range(vote_count):
+                        seg_pred, _ = self.segmenter.model(points, cls_one_hot)
+                        if tuple(seg_pred.shape) != (1, group_points, DEFAULT_NUM_PART):
+                            raise ValueError(f'PointNet++ fixed group output mismatch: {tuple(seg_pred.shape)}')
+                        probabilities = torch.exp(seg_pred[0]).cpu().numpy()
+                        if not np.isfinite(probabilities).all():
+                            raise ValueError('PointNet++ produced nonfinite probabilities')
+                        # add.at includes every occurrence of repeated source indices.
+                        # These are each point's own network predictions, not KNN labels.
+                        np.add.at(probability_sum, indices, probabilities)
+                        np.add.at(coverage, indices, 1)
+                    group_count += 1
         except torch.cuda.OutOfMemoryError as exc:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             raise RuntimeError(
-                f"整云一次性推理显存不足：输入 {dense_count} 点。"
-                "当前版本不自动回退到分批模式。"
+                f"固定点数组推理显存不足：每次 {group_points} 点。"
+                "未输出不完整标签。"
             ) from exc
 
-        averaged_scores = vote_pool / vote_count
+        if not np.all(coverage > 0):
+            raise RuntimeError('Direct inference coverage incomplete; refusing missing-point labels')
+        averaged_scores = probability_sum / coverage[:, None]
         inference_s = time.perf_counter() - inference_start
 
         restore_start = time.perf_counter()
-        dense_labels = (
-            torch.argmax(averaged_scores, dim=2)[0]
-            .cpu()
-            .numpy()
-            .astype(np.int32)
-        )
+        dense_labels = np.argmax(averaged_scores, axis=1).astype(np.int32)
+        source_labels = np.empty_like(dense_labels)
+        source_labels[canonical_order] = dense_labels
+        dense_labels = source_labels
+        self.last_direct_prediction_counts = np.empty_like(coverage)
+        self.last_direct_prediction_counts[canonical_order] = coverage
         restore_s = time.perf_counter() - restore_start
 
         label_counts = {
@@ -877,12 +1031,22 @@ class PointCloudPipeline:
         }
 
         print(
-            f"    PointNet++ 整云推理: {inference_s:.3f} s | "
-            f"输入 {dense_count} 点 | 无分批 | 无重叠 | 无KNN"
+            f"    PointNet++ 全点覆盖: {inference_s:.3f} s | "
+            f"每组 {group_points} 点 × {group_count} 组 | 原点 {dense_count} | 无KNN"
         )
 
         return dense_labels, label_counts, {
             "dense_count": dense_count,
+            "group_points": group_points,
+            "group_count": group_count,
+            "forward_count": group_count * vote_count,
+            "model_point_occurrences": int(coverage.sum()),
+            "coverage_min": int(coverage.min()),
+            "coverage_max": int(coverage.max()),
+            "all_points_directly_predicted": True,
+            "normalization": "full_cloud_before_sampling",
+            "label_source": "mean_of_own_network_probabilities",
+            "context_fraction": self.config.pointnet_context_fraction,
             "prepare_s": round(float(prepare_s), 6),
             "inference_s": round(float(inference_s), 6),
             "restore_s": round(float(restore_s), 6),
@@ -913,16 +1077,20 @@ class PointCloudPipeline:
         json_path = output_root / "json" / f"{input_path.stem}.json"
         write_json(json_path, result)
 
+        geometry_failed = result.get('geometry_status') in ('partial', 'unsupported')
+        geometry_error = '; '.join(str(item.get('reason', '')) for item in result.get('geometry_failures', []))
+        completion_label = '几何未通过' if geometry_failed else '完成'
         total_s = time.perf_counter() - file_start
         print(
-            f"[完成] {input_path.name}: 总 {total_s:.3f} s | "
+            f"[{completion_label}] {input_path.name}: 总 {total_s:.3f} s | "
             f"PointNet++ {pointnet_stats['inference_s']:.3f} s | "
             f"几何后处理 {geometry_s:.3f} s"
         )
 
         return {
             "input": str(input_path),
-            "status": "success",
+            "status": "failed" if geometry_failed else "success",
+            **({'error': geometry_error} if geometry_failed else {}),
             "json": str(json_path),
             "stage_counts": stage_counts,
             "dense_label_counts": dense_label_counts,
@@ -1006,6 +1174,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--device", choices=("cpu", "cuda"), default=None)
     parser.add_argument("--checkpoint", default=None, help="模型权重路径")
+    parser.add_argument('--geometry-scheme', type=int, choices=(2,), default=DEFAULT_CONFIG.geometry_scheme,
+                        help='仅支持2：高板参考共同方向和宽度')
 
     # 保留常用 CLI 覆盖项；其余参数直接在 PipelineConfig 集中修改。
     parser.add_argument(
@@ -1045,6 +1215,7 @@ def main(argv=None) -> int:
     args = build_argument_parser().parse_args(argv)
 
     config = PipelineConfig(
+        geometry_scheme=args.geometry_scheme,
         pointnet_num_point=args.num_point,
         pointnet_num_votes=args.num_votes,
         voxel_size=args.voxel_size,

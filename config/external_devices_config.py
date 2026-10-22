@@ -7,7 +7,6 @@
   - ALLOW_REAL_MOTION
   - USE_LIVE_LIDAR_CAPTURE
   - ALLOW_DEMO_DEVICE_DATA
-  - 实验室算法开关等
 """
 from __future__ import annotations
 
@@ -33,7 +32,6 @@ from config.feature_switches import (
 # 传感器经现场交换机进局域网；笔记本用工程师调试 IP（同网段），不要网线对插相机。
 # 切换产线只改 FIELD_LINE_ID = 1 / 2 / 3
 FIELD_LINE_ID = 1
-LAB_PLC_IP = "192.168.6.6"  # 实验室龙门 PLC（lab 模式用）
 FIELD_SITE_BY_LINE: Dict[int, Dict[str, Any]] = {
     1: {
         "net": "10.11.206.0",
@@ -71,12 +69,8 @@ def get_field_site(line_id: int | None = None) -> Dict[str, Any]:
 
 
 def resolve_plc_ip() -> str:
-    """lab 用实验室 PLC；field/sim 默认用当前产线现场 PLC。"""
-    import config.feature_switches as fs
-
-    if str(fs.RUN_PROFILE or "").lower() == "lab":
-        return str(LAB_PLC_IP)
-    return str(get_field_site().get("plc_ip") or LAB_PLC_IP)
+    """Use the configured field production line for PLC read-only controls."""
+    return str(get_field_site()["plc_ip"])
 
 
 # ---- PLC（Modbus TCP）---- 对应 gantry_settings.json
@@ -163,22 +157,15 @@ LIVOX = {
     },
 }
 
-# 实验室相机：D435i（USB）
+# 现场离线 RGB-D 文件与相机坐标标定；实际图像路径由 offline_paths.py 提供。
 CAMERA = {
     "enabled": True,
-    "backend": "realsense",
-    "serial": "",  # 空=自动选择第一台 D435i
-    "color_width": 1280,
-    "color_height": 720,
-    "depth_width": 1280,
-    "depth_height": 720,
-    "fps": 30,
+    "backend": "offline_files",
     "depth_unit_mm": 1.0,
     "extrinsic_file": "config/camera_extrinsic.json",
     "plc_reference_r_deg": -80.0,
     "calibration_dir": "config/sensor_coordinate_config",
     "intrinsic_file": "config/sensor_coordinate_config/camera_intrinsic.json",
-    "capture_dir": "workdir/camera_captures",
 }
 
 # 现场相机（field）：海康角点 + 梅卡托盘

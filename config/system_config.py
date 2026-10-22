@@ -20,8 +20,19 @@ import config.feature_switches as feature_switches
 
 
 SYSTEM_CONFIG: Dict[str, Any] = {
+    "point_cloud": {
+        # 边界拟合仅保留方案二；不再支持方案一或自动回退。
+        "geometry_scheme": 2,
+        # 高度取值方案A/B/C/D，与二维边界拟合分别控制。
+        "height_scheme": "A",
+        "single_height_length_fraction": 0.60,
+        "high_height_length_fraction": 0.80,
+        "low_height_length_fraction": 0.40,
+        "single_height_width_fraction": 0.95,
+        "high_low_height_width_fraction": 0.95,
+    },
     "runtime": {
-        # 设备模式 / Mock 开关来自 config/feature_switches.py（含三模式）
+        # 设备模式 / Mock 开关来自 config/feature_switches.py（现场离线）
         "device_mode": feature_switches.DEVICE_MODE,
         "allow_demo_device_data": bool(feature_switches.ALLOW_DEMO_DEVICE_DATA),
         "allow_unimplemented_vision_measurement_zero": bool(

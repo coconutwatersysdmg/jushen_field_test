@@ -14,6 +14,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+from utils.measurement_rounding import round_measurement
 from typing import Any, Dict, Mapping, Optional
 
 from config.system_config import get_system_config
@@ -97,8 +98,27 @@ class PointCloudProcessingService:
 
         # 保留算法包自身默认参数，仅把系统配置中明确给出的常用参数覆盖进去。
         supported = {
+            "geometry_scheme",
             "pointnet_num_point",
             "pointnet_num_votes",
+            "pointnet_context_fraction",
+            "corner_height_radii",
+            "corner_height_min_points",
+            "corner_height_min_tolerance",
+            "corner_height_max_tolerance",
+            "corner_height_iterations",
+            "corner_height_max_slope",
+            "single_height_length_fraction",
+            "height_scheme",
+            "high_height_length_fraction",
+            "low_height_length_fraction",
+            "high_low_height_width_fraction",
+            "single_height_width_fraction",
+            "single_height_min_points",
+            "single_height_min_tolerance",
+            "single_height_max_tolerance",
+            "single_height_iterations",
+            "single_height_max_slope",
             "voxel_size",
             "plane_threshold",
             "dbscan_eps",
@@ -122,28 +142,43 @@ class PointCloudProcessingService:
     def _normalize_board(label: str, raw: Mapping[str, Any]) -> Dict[str, Any]:
         corner_ids = [str(x) for x in (raw.get("corner_ids") or [])]
         corners = raw.get("corners_xyz_mm") or []
-        if len(corner_ids) != len(corners) or len(corner_ids) != 4:
+        estimation = raw.get('height_estimation')
+        withheld_height = (isinstance(estimation, Mapping) and estimation.get('status') != 'supported'
+                           and len(corners) == 0 and len(corner_ids) == 4)
+        if not withheld_height and (len(corner_ids) != len(corners) or len(corner_ids) != 4):
             raise RuntimeError(f"{label} 角点输出不完整：corner_ids={corner_ids}, corners={len(corners)}")
         normalized_corners = []
         world_points: Dict[str, Dict[str, float]] = {}
         for name, point in zip(corner_ids, corners):
             if not isinstance(point, (list, tuple)) or len(point) < 3:
                 raise RuntimeError(f"{label}/{name} 的 XYZ 格式无效：{point}")
-            xyz = [float(point[0]), float(point[1]), float(point[2])]
+            xyz = [round_measurement(point[0]), round_measurement(point[1]), round_measurement(point[2])]
             normalized_corners.append(xyz)
             world_points[name] = {"x": xyz[0], "y": xyz[1], "z": xyz[2]}
 
         result = {
             "board_label": label,
+            "coordinate_frame": str(raw.get("coordinate_frame") or "radar_world"),
+            "coordinate_unit": "mm",
             "corner_ids": corner_ids,
             "corners_xyz_mm": normalized_corners,
             "world_points": world_points,
-            "length_mm": float(raw.get("length_mm") or 0.0),
-            "width_mm": float(raw.get("width_mm") or 0.0),
-            "height_mean_mm": float(raw.get("height_mean_mm") or 0.0),
-            "tilt_angle_deg": float(raw.get("tilt_angle_deg") or 0.0),
-            "offset_angle_deg": float(raw.get("offset_angle_deg") or 0.0),
+            "length_mm": round_measurement(raw.get("length_mm") or 0),
+            "width_mm": round_measurement(raw.get("width_mm") or 0),
+            "height_mean_mm": round_measurement(raw["height_mean_mm"]) if raw.get("height_mean_mm") is not None else None,
+            "tilt_angle_deg": round_measurement(raw.get("tilt_angle_deg") or 0),
+            "offset_angle_deg": round_measurement(raw.get("offset_angle_deg") or 0),
         }
+        if raw.get("radar_corners_xyz_mm") is not None:
+            result["radar_corners_xyz_mm"] = [[round_measurement(v) for v in point] for point in raw["radar_corners_xyz_mm"]]
+        for key in ("global_plane_radar_corners_xyz_mm", "corner_height_estimation", "corner_height_all_supported",
+                    "geometry_scheme", "geometry_scheme_requested", "geometry_method", "shared_xy_reference",
+                    "shared_geometry_quality", "fallback_reason", "geometry_revision", "transition_geometry", "available_shared_xy_reference",
+                    "height_estimation", "corner_height_mean_mm", "transition_support",
+                    "available_xy_corners_radar_mm", "height_source_radar_corners_xyz_mm",
+                    "geometry_plane_height_mean_mm", "height_source_failure"):
+            if key in raw:
+                result[key] = raw[key]
         if isinstance(raw.get("loading_plan"), Mapping):
             result["loading_plan"] = dict(raw["loading_plan"])
         return result
@@ -151,6 +186,14 @@ class PointCloudProcessingService:
     @classmethod
     def normalize_result(cls, raw_result: Mapping[str, Any]) -> Dict[str, Any]:
         """将算法的 label_2/label_3 输出转换成主系统统一结构。"""
+        geometry_status = raw_result.get('geometry_status')
+        geometry_failures = list(raw_result.get('geometry_failures') or [])
+        geometry_metadata = ({'geometry_status': geometry_status, 'geometry_failures': geometry_failures}
+                             if geometry_status else {})
+        if isinstance(raw_result.get('label_correction'), Mapping):
+            geometry_metadata['label_correction'] = dict(raw_result['label_correction'])
+        failure_details = '; '.join(str(item.get('reason', '')) for item in geometry_failures)
+        incomplete = geometry_status in ('partial', 'unsupported')
         boards = []
         for label in ("label_2", "label_3"):
             value = raw_result.get(label)
@@ -160,9 +203,11 @@ class PointCloudProcessingService:
         if not boards:
             return {
                 "success": False,
-                "message": "点云处理完成，但未成功提取 label_2 / label_3 车板几何",
+                "message": "点云处理完成，但未成功提取 label_2 / label_3 车板几何" +
+                           ("；方案二支撑不足：" + failure_details if incomplete else ""),
                 "board_count": 0,
                 "boards": [],
+                **geometry_metadata,
             }
 
         corner_ids = []
@@ -173,20 +218,26 @@ class PointCloudProcessingService:
                 corner_ids.append(name)
                 point = {
                     "name": name,
-                    "x": float(xyz[0]),
-                    "y": float(xyz[1]),
-                    "z": float(xyz[2]),
+                    "x": round_measurement(xyz[0]),
+                    "y": round_measurement(xyz[1]),
+                    "z": round_measurement(xyz[2]),
                     "board_label": board["board_label"],
                 }
                 corner_points.append(point)
                 world_points[name] = {"x": point["x"], "y": point["y"], "z": point["z"]}
 
         board_count = len(boards)
-        board_mode = "high_low_board" if board_count >= 2 else "single_board"
-        heights = [(b["height_mean_mm"], b["board_label"]) for b in boards]
+        board_mode = "incomplete" if incomplete else ("high_low_board" if board_count >= 2 else "single_board")
+        heights = [(b["height_mean_mm"], b["board_label"]) for b in boards if b["height_mean_mm"] is not None]
+        # Unsupported single-board H is missing, never zero or the old corner mean.
+        if not heights:
+            heights = [(None, boards[0]["board_label"])]
         low_height, low_label = min(heights)
         high_height, high_label = max(heights)
-        height_difference = abs(float(high_height) - float(low_height)) if board_count >= 2 else 0.0
+        if board_count == 2 and len(heights) != board_count:
+            # A missing per-deck H must not collapse high/low labels to one board.
+            high_label, low_label = 'label_2', 'label_3'
+        height_difference = abs(float(high_height) - float(low_height)) if board_count >= 2 and len(heights) == board_count else (0.0 if board_count == 1 else None)
 
         first_workface_plan = None
         label2 = next((b for b in boards if b["board_label"] == "label_2"), None)
@@ -194,16 +245,19 @@ class PointCloudProcessingService:
             first_workface_plan = dict(label2["loading_plan"])
 
         return {
-            "success": True,
+            "success": not incomplete,
+            **geometry_metadata,
+            **({'message': '方案二几何结果不完整，已保留有效角点供检查，整车板型尚未确认：' + failure_details}
+               if incomplete else {}),
             "recognition_source": "pointnet2_point_cloud_pipeline",
-            "coordinate_frame": "radar_world",
+            "coordinate_frame": "world" if all(b["coordinate_frame"] == "world" for b in boards) else "radar_world",
             "coordinate_unit": "mm",
             "board_count": board_count,
             "board_mode": board_mode,
-            "is_high_low_board": board_count >= 2,
+            "is_high_low_board": None if incomplete else board_count >= 2,
             "low_board_label": low_label,
             "high_board_label": high_label,
-            "height_difference_mm": round(height_difference, 3),
+            "height_difference_mm": round_measurement(height_difference) if height_difference is not None and not incomplete else None,
             "corner_ids": corner_ids,
             "corner_points": corner_points,
             "world_points": world_points,

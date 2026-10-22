@@ -1,11 +1,13 @@
 ﻿param(
-    [string]$RemoteShare = "",
-    [string]$LocalPath = "",
-    [double]$Interval = 10,
+    [Alias("SourcePath")][string]$RemoteShare = "",
+    [Alias("DestinationPath")][string]$LocalPath = "",
+    [Alias("IntervalSeconds")][double]$Interval = 10,
     [datetime]$MinFileDate = [datetime]::new(2026, 10, 1),
     [int]$ParentProcessId = 0,
     [int]$MaxScans = 0,
-    [switch]$SkipAuthentication
+    [switch]$SkipAuthentication,
+    [double]$StableSeconds = 0,
+    [switch]$SyncExisting
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,7 +49,9 @@ Write-SyncLog "Target: $LocalPath"
 Write-SyncLog "All file types; minimum date (inclusive): $($MinFileDate.ToString('yyyy-MM-dd HH:mm:ss')). Filename capture date first, otherwise last-write time."
 Write-SyncLog "Newest first; existing local filenames are skipped without overwriting. Checking every $Interval seconds."
 
-$Authenticated = [bool]$SkipAuthentication
+$Authenticated = [bool]$SkipAuthentication -or -not $RemoteShare.StartsWith("\\")
+$ItlOnly = $PSBoundParameters.ContainsKey("StableSeconds") -or $SyncExisting
+$SeenFiles = @{}
 $Scan = 0
 while ($MaxScans -le 0 -or $Scan -lt $MaxScans) {
     if ($ParentProcessId -gt 0 -and -not (Get-Process -Id $ParentProcessId -ErrorAction SilentlyContinue)) {
@@ -77,6 +81,10 @@ while ($MaxScans -le 0 -or $Scan -lt $MaxScans) {
         }
         $RemoteFiles = @(Get-ChildItem -LiteralPath $RemoteShare -File -Force -ErrorAction Stop |
             Sort-Object -Property @{ Expression = { Get-CaptureDate $_ }; Descending = $true })
+        if ($ItlOnly) {
+            $RemoteFiles = @($RemoteFiles | Where-Object { $_.Extension -ieq ".itl" })
+            Write-SyncLog "CONNECTED: ITL source is accessible."
+        }
         Write-SyncLog "Share accessible; discovered $($RemoteFiles.Count) files."
         foreach ($File in $RemoteFiles) {
             $TemporaryFile = $null
@@ -91,6 +99,15 @@ while ($MaxScans -le 0 -or $Scan -lt $MaxScans) {
                 if (Test-Path -LiteralPath $LocalFile -PathType Leaf) {
                     $Unchanged++
                     continue
+                }
+                if ($ItlOnly -and $StableSeconds -gt 0) {
+                    $Signature = "$($File.Length):$($File.LastWriteTimeUtc.Ticks)"
+                    $Prior = $SeenFiles[$File.Name]
+                    if ($null -eq $Prior -or $Prior.Signature -ne $Signature) {
+                        $SeenFiles[$File.Name] = @{ Signature = $Signature; Since = [DateTime]::UtcNow }
+                        continue
+                    }
+                    if (([DateTime]::UtcNow - $Prior.Since).TotalSeconds -lt $StableSeconds) { continue }
                 }
                 Write-SyncLog "Copying: $($File.Name) ($($File.Length) bytes)"
                 # Deny concurrent writers/deletion for the entire transfer. A writer
@@ -116,9 +133,11 @@ while ($MaxScans -le 0 -or $Scan -lt $MaxScans) {
                 $TemporaryFile = $null
                 (Get-Item -LiteralPath $LocalFile -Force).LastWriteTimeUtc = $File.LastWriteTimeUtc
                 $Copied++
+                if ($ItlOnly) { Write-SyncLog "COPIED: $($File.Name) -> $LocalFile" }
                 Write-SyncLog "Copied: $($File.Name) -> $LocalFile"
             } catch {
                 $Failed++
+                if ($ItlOnly) { Write-SyncLog "FILE_ERROR: $($File.Name): $($_.Exception.Message)" "ERROR" }
                 Write-SyncLog "Copy failed: $($File.Name): $($_.Exception.Message); retry next scan." "ERROR"
             } finally {
                 if ($TargetStream) { $TargetStream.Dispose() }
@@ -130,7 +149,7 @@ while ($MaxScans -le 0 -or $Scan -lt $MaxScans) {
         }
     } catch {
         $Failed++
-        $Authenticated = [bool]$SkipAuthentication
+        $Authenticated = [bool]$SkipAuthentication -or -not $RemoteShare.StartsWith("\\")
         Write-SyncLog "Scan failed: $($_.Exception.Message); retry in $Interval seconds." "ERROR"
     }
     Write-SyncLog "Scan #$Scan complete: copied=$Copied unchanged=$Unchanged before_cutoff=$BeforeCutoff failed=$Failed"

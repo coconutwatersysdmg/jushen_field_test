@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
+from utils.measurement_rounding import round_measurement
 
 from PySide6.QtCore import QEvent, QEventLoop, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QFrame, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit, QMessageBox,
     QTabWidget, QTabBar, QToolButton, QSizePolicy, QComboBox, QCheckBox, QListWidget, QListWidgetItem,
-    QAbstractItemView, QStackedWidget,
+    QAbstractItemView, QStackedWidget, QFileDialog,
 )
 
 from controllers.flow_controller import FlowController
@@ -20,12 +21,10 @@ from ui.twin_bridge import TwinBridge
 from ui.debug_dialog import DebugInputDialog
 from ui.corner_review_dialog import run_corner_review
 from ui.plc_motion_dialog import PlcMotionDialog, open_plc_manual_console
-from ui.board_data_panel import BoardDataPanel
+from ui.board_data_panel import BoardDataPanel, update_radar_world_corner_table
 from ui.theme import is_light_theme, twin_clear_color
 from config.feature_switches import (
-    apply_run_profile,
     get_run_profile,
-    list_run_profiles,
 )
 import config.feature_switches as feature_switches
 
@@ -38,42 +37,24 @@ class MainWindow(QMainWindow):
     motionSnapshot = Signal(dict, dict)
     plcCommandReady = Signal(dict)
 
-    FLOW_STAGES = [
-        (1,"设备连接检查"),
-        (2,"货物-托盘偏差"),
-        (3,"3.1 插取 ∥ 3.2 雷达"),
-        (4,"雷达点 → PLC → 相机"),
-        (5,"角点 RGB-D"),
-        (6,"角点识别 / 人工审核"),
-        (7,"转换 WORLD"),
-        (8,"8.1 规划 · 8.2 补偿 · 8.3 锁定"),
-        (9,"放置前监测 / 计算位置 / 放置"),
-        (10,"底托检测 · 区域两面 · 货物偏差"),
-        (11,"反馈 PLC / 空间管理"),
-        (12,"机械臂返回 / 下一轮"),
-    ]
-    LAB_FLOW_STAGES = [
+    FIELD_FLOW_STAGES = [
         (1, "设备连接检查"),
         (2, "相机插孔识别 ∥ 雷达四角粗定位"),
         (3, "相机精定位（拍照+YOLO）"),
         (4, "B 区循环：监测 → 人工确认 → 拍照判区"),
     ]
     STEP_STAGE = {
-        "DEVICE_CHECK":1,"LAB_SENSE":2,"LAB_CORNER_SHELL":3,
-        "LAB_RETURN_ORIGIN":4,"LAB_PRE_PLACE_MONITOR":4,"LAB_WAIT_MANUAL_PLACE":4,"LAB_PLACE_VERIFY":4,
-        "PRE_PICK_OFFSET":2,"PARALLEL_LOCATE":3,"PICK_ONLY":3,"RADAR_TO_CAMERA":4,
-        "CAPTURE_CORNERS":5,"CORNER_RECOGNITION":6,"CAMERA_TO_WORLD":7,
-        "INITIAL_SPACE_PLAN":8,"NEIGHBOR_POSE":8,"TARGET_CONFIRM":8,"PRE_PLACE_MONITOR":9,"PLACE":9,
-        "POST_PLACE_BOTTOM":10,"POST_REGION":10,"POST_CARGO_OFFSET":10,"FEEDBACK":11,"RETURN":12,"DONE":12,
+        "DEVICE_CHECK":1,"FIELD_SENSE":2,"FIELD_CORNER_SHELL":3,
+        "FIELD_RETURN_ORIGIN":4,"FIELD_PRE_PLACE_MONITOR":4,"FIELD_WAIT_MANUAL_PLACE":4,"FIELD_PLACE_VERIFY":4,
+        "DONE":4,
     }
 
     def __init__(self):
         super().__init__()
         self.controller=FlowController(); self.bridge=TwinBridge(); self.debug_inputs=self.controller.default_debug_inputs()
         self._step_busy=False
-        self._lab_auto_waiting_for_manual_place=False
+        self._field_auto_waiting_for_manual_place=False
         self._running_stage=0  # 正在执行的流程格编号；与 step_code（可能已前进到下一步）区分
-        self._profile_changing=False
         self._latest_plc_cmd=None
         self._plc_cmd_queue=[]
         self._latest_plc_batch=[]
@@ -81,7 +62,7 @@ class MainWindow(QMainWindow):
         self.motionSnapshot.connect(self._apply_motion_snapshot)
         self.plcCommandReady.connect(self._enqueue_plc_command, Qt.ConnectionType.QueuedConnection)
         self.controller.set_state_listener(self.motionSnapshot.emit)
-        self.controller.set_ui_event_pump(self._pump_lab_camera_preview)
+        self.controller.set_ui_event_pump(self._pump_field_camera_preview)
         self.controller.set_plc_command_listener(self.plcCommandReady.emit)
         self.controller.set_corner_review_callback(self._review_corners)
         self.timer=QTimer(self); self.timer.setInterval(900); self.timer.timeout.connect(self._auto_tick)
@@ -157,51 +138,40 @@ class MainWindow(QMainWindow):
 
         ops=QFrame(); ops.setObjectName("opsCluster")
         ops_l=QHBoxLayout(ops); ops_l.setContentsMargins(8,6,8,6); ops_l.setSpacing(8)
-        mode_label=QLabel("模式"); mode_label.setObjectName("clusterLabel")
-        ops_l.addWidget(mode_label,0)
-        self.profile_combo=QComboBox(); self.profile_combo.setMinimumWidth(110); self.profile_combo.setObjectName("modeCombo")
-        for item in list_run_profiles():
-            self.profile_combo.addItem(f"{item['title']}", item["id"])
-            idx=self.profile_combo.count()-1
-            self.profile_combo.setItemData(idx, item.get("subtitle") or "", Qt.ItemDataRole.ToolTipRole)
-        current=str(feature_switches.RUN_PROFILE or "field")
-        found=self.profile_combo.findData(current)
-        if found>=0: self.profile_combo.setCurrentIndex(found)
-        self.profile_combo.currentIndexChanged.connect(self._on_run_profile_changed)
-        self._sync_profile_combo_tooltip()
-        ops_l.addWidget(self.profile_combo,0)
+        profile_label = QLabel("现场离线联调")
+        profile_label.setObjectName("phaseLabel")
+        ops_l.addWidget(profile_label, 0)
         phase_cap=QLabel("阶段"); phase_cap.setObjectName("clusterLabel"); ops_l.addWidget(phase_cap,0)
         self.phase=QLabel("IDLE"); self.phase.setObjectName("phaseLabel"); ops_l.addWidget(self.phase,1)
         self.progress=QLabel("0 / 0"); self.progress.setObjectName("progressLabel"); ops_l.addWidget(self.progress,0)
         top.addWidget(ops,1)
         lay.addWidget(top_bar,0)
 
-        f,l,self.flow_toggle=self._collapsible_card("流程链路",expanded=False)
-        self.field_flow_card=f
-        self.flow_nodes=[]
-        for row_index,stage_row in enumerate((self.FLOW_STAGES[:6],self.FLOW_STAGES[6:])):
-            row=QHBoxLayout(); row.setSpacing(3)
-            for index,(number,title_text) in enumerate(stage_row):
-                node=QLabel(f"{number}. {title_text}"); node.setAlignment(Qt.AlignmentFlag.AlignCenter); node.setWordWrap(True)
-                node.setMinimumHeight(28); node.setToolTip(f"步骤 {number}：{title_text}"); row.addWidget(node,1); self.flow_nodes.append(node)
-                if index < len(stage_row)-1:
-                    arrow=QLabel("›"); arrow.setObjectName("mutedArrow"); arrow.setAlignment(Qt.AlignmentFlag.AlignCenter); row.addWidget(arrow,0)
-            l.addLayout(row)
-        lay.addWidget(f,0)
-
-        lab_flow,lab_flow_l,self.lab_flow_toggle=self._collapsible_card("实验室流程",expanded=True)
-        self.lab_flow_card=lab_flow
-        self.lab_flow_nodes=[]
-        lab_row=QHBoxLayout(); lab_row.setSpacing(3)
-        for index,(number,title_text) in enumerate(self.LAB_FLOW_STAGES):
+        field_flow,field_flow_l,self.field_flow_toggle=self._collapsible_card("现场流程",expanded=True)
+        self.field_flow_card=field_flow
+        self.field_flow_nodes=[]
+        field_row=QHBoxLayout(); field_row.setSpacing(3)
+        for index,(number,title_text) in enumerate(self.FIELD_FLOW_STAGES):
             node=QLabel(f"{number}. {title_text}"); node.setAlignment(Qt.AlignmentFlag.AlignCenter); node.setWordWrap(True)
-            node.setMinimumHeight(28); node.setToolTip(f"实验室步骤 {number}：{title_text}")
-            lab_row.addWidget(node,1); self.lab_flow_nodes.append(node)
-            if index < len(self.LAB_FLOW_STAGES)-1:
-                arrow=QLabel("›"); arrow.setObjectName("mutedArrow"); arrow.setAlignment(Qt.AlignmentFlag.AlignCenter); lab_row.addWidget(arrow,0)
-        lab_flow_l.addLayout(lab_row)
-        lab_flow.setVisible(False)
-        lay.addWidget(lab_flow,0)
+            node.setMinimumHeight(28); node.setToolTip(f"现场步骤 {number}：{title_text}")
+            field_row.addWidget(node,1); self.field_flow_nodes.append(node)
+            if index < len(self.FIELD_FLOW_STAGES)-1:
+                arrow=QLabel("›"); arrow.setObjectName("mutedArrow"); arrow.setAlignment(Qt.AlignmentFlag.AlignCenter); field_row.addWidget(arrow,0)
+        field_flow_l.addLayout(field_row)
+        field_flow.setVisible(False)
+        lay.addWidget(field_flow,0)
+
+        radar_row = QHBoxLayout()
+        self.radar_pcd_btn = QPushButton("选择雷达 PCD")
+        self.radar_pcd_btn.setObjectName("primary")
+        self.radar_pcd_btn.clicked.connect(self._choose_radar_pcd)
+        radar_row.addWidget(self.radar_pcd_btn)
+        radar_path = str(self.debug_inputs.get("selected_radar_pcd") or self.debug_inputs.get("point_cloud_path") or "尚未选择")
+        self.radar_pcd_label = QLabel("第2步雷达 PCD：" + radar_path)
+        self.radar_pcd_label.setWordWrap(True)
+        self.radar_pcd_label.setToolTip(radar_path)
+        radar_row.addWidget(self.radar_pcd_label, 1)
+        lay.addLayout(radar_row)
 
         self.body_splitter=QSplitter(Qt.Orientation.Vertical); self.body_splitter.setChildrenCollapsible(False); lay.addWidget(self.body_splitter,1)
         main=QSplitter(Qt.Orientation.Horizontal); main.setChildrenCollapsible(False); self.body_splitter.addWidget(main); self.main_splitter=main
@@ -332,7 +302,7 @@ class MainWindow(QMainWindow):
         controls.addStretch(1); cl.addWidget(tool,0)
 
         self.right_tabs=QTabWidget(); rl.addWidget(self.right_tabs,1)
-        self.field_right_panel=self.right_tabs
+        self.detail_right_panel=self.right_tabs
         device_page=QWidget(); device_layout=QVBoxLayout(device_page); device_layout.setContentsMargins(5,5,5,5); device_layout.setSpacing(7)
         space_page=QWidget(); space_layout=QVBoxLayout(space_page); space_layout.setContentsMargins(5,5,5,5)
 
@@ -418,41 +388,41 @@ class MainWindow(QMainWindow):
         self.right_tabs.addTab(module_page,"模型输入/输出")
         self._module_rows=[]; self._selected_module_id=""; self._latest_module_id=""
 
-        # 实验室右侧：相机照片 + 插孔坐标 + 雷达四角（相机预览/状态/点位合一模块）
-        self.lab_right_panel=QWidget()
-        lab_rl=QVBoxLayout(self.lab_right_panel); lab_rl.setContentsMargins(0,0,0,0); lab_rl.setSpacing(8)
+        # 现场右侧：相机照片 + 插孔坐标 + 雷达四角（相机预览/状态/点位合一模块）
+        self.field_right_panel=QWidget()
+        field_rl=QVBoxLayout(self.field_right_panel); field_rl.setContentsMargins(0,0,0,0); field_rl.setSpacing(8)
         cam_card,cam_l,_=self._collapsible_card("相机实拍 / 标注结果 / 托盘插孔 WORLD",expanded=True)
         cam_unit=QFrame(); cam_unit.setObjectName("camUnit")
         cam_unit_l=QVBoxLayout(cam_unit); cam_unit_l.setContentsMargins(0,0,0,0); cam_unit_l.setSpacing(0)
-        self.lab_camera_preview=QLabel("执行后显示：插孔 / 角点 / B区纸箱检测图")
-        self.lab_camera_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lab_camera_preview.setMinimumHeight(220)
-        cam_unit_l.addWidget(self.lab_camera_preview,3)
-        self.lab_camera_caption=QLabel("等待拍照")
-        self.lab_camera_caption.setWordWrap(True)
-        cam_unit_l.addWidget(self.lab_camera_caption,0)
-        self.lab_camera_history=QComboBox()
-        self.lab_camera_history.setToolTip("选择本轮任一次实拍及对应识别标注图")
-        self.lab_camera_history.currentIndexChanged.connect(self._on_lab_camera_history_changed)
-        cam_unit_l.addWidget(self.lab_camera_history,0)
-        self.lab_hole_table=QTableWidget(0,4)
-        self.lab_hole_table.setHorizontalHeaderLabels(["点位","X(mm)","Y(mm)","Z(mm)"])
-        self.lab_hole_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.lab_hole_table.setMaximumHeight(120)
-        self._tune_table(self.lab_hole_table)
-        cam_unit_l.addWidget(self.lab_hole_table,1)
+        self.field_camera_preview=QLabel("执行后显示：插孔 / 角点 / B区纸箱检测图")
+        self.field_camera_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.field_camera_preview.setMinimumHeight(220)
+        cam_unit_l.addWidget(self.field_camera_preview,3)
+        self.field_camera_caption=QLabel("等待拍照")
+        self.field_camera_caption.setWordWrap(True)
+        cam_unit_l.addWidget(self.field_camera_caption,0)
+        self.field_camera_history=QComboBox()
+        self.field_camera_history.setToolTip("选择本轮任一次实拍及对应识别标注图")
+        self.field_camera_history.currentIndexChanged.connect(self._on_field_camera_history_changed)
+        cam_unit_l.addWidget(self.field_camera_history,0)
+        self.field_hole_table=QTableWidget(0,4)
+        self.field_hole_table.setHorizontalHeaderLabels(["点位","X(mm)","Y(mm)","Z(mm)"])
+        self.field_hole_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.field_hole_table.setMaximumHeight(120)
+        self._tune_table(self.field_hole_table)
+        cam_unit_l.addWidget(self.field_hole_table,1)
         cam_l.addWidget(cam_unit,1)
-        lab_rl.addWidget(cam_card,3)
+        field_rl.addWidget(cam_card,3)
 
-        radar_card,radar_l,_=self._collapsible_card("角点 WORLD",expanded=True)
-        self.lab_radar_table=QTableWidget(0,5)
-        self.lab_radar_table.setHorizontalHeaderLabels(["角点","X","Y","Z","来源"])
-        self.lab_radar_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self._tune_table(self.lab_radar_table)
-        radar_l.addWidget(self.lab_radar_table,1)
-        lab_rl.addWidget(radar_card,2)
-        self.lab_right_panel.setVisible(False)
-        rl.addWidget(self.lab_right_panel,1)
+        radar_card,radar_l,_=self._collapsible_card("雷达角点 WORLD",expanded=True)
+        self.field_radar_table=QTableWidget(0,5)
+        self.field_radar_table.setHorizontalHeaderLabels(["角点","X(mm)","Y(mm)","Z(mm)","来源"])
+        self.field_radar_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._tune_table(self.field_radar_table)
+        radar_l.addWidget(self.field_radar_table,1)
+        field_rl.addWidget(radar_card,2)
+        self.field_right_panel.setVisible(False)
+        rl.addWidget(self.field_right_panel,1)
 
         bottom=QSplitter(Qt.Orientation.Horizontal); bottom.setChildrenCollapsible(False); self.body_splitter.addWidget(bottom)
         f,l,_=self._collapsible_card("运行日志 / 报警",expanded=False); self.logs=QTextEdit(); self.logs.setReadOnly(True); self.logs.setMinimumHeight(90); l.addWidget(self.logs); bottom.addWidget(f)
@@ -495,9 +465,9 @@ class MainWindow(QMainWindow):
 
     def _current_flow_camera_entries(self) -> list[dict]:
         """只取当前流程记录的照片，不扫本地历史目录。"""
-        from services.lab_camera_gallery import build_lab_camera_gallery_entries
+        from services.field_camera_gallery import build_field_camera_gallery_entries
 
-        live = list(getattr(self.controller, "lab_camera_gallery", None) or [])
+        live = list(getattr(self.controller, "field_camera_gallery", None) or [])
         entries: list[dict] = []
         seen: set[str] = set()
 
@@ -519,7 +489,7 @@ class MainWindow(QMainWindow):
             if isinstance(item, dict):
                 _push(item)
 
-        built = build_lab_camera_gallery_entries(
+        built = build_field_camera_gallery_entries(
             getattr(self.controller, "round_data", {}) or {},
             round_index=int(getattr(self.controller, "round_index", 0) or 0) + 1,
         )
@@ -690,80 +660,11 @@ class MainWindow(QMainWindow):
         if not self.controller.queue:
             self.controller.set_plan([{"cargo_code":"CARGO-001","cargo_name":"货物","quantity":3,"length_mm":1200,"width_mm":1000,"height_mm":900,"pallet_reference_width_mm":1200}])
 
-    def _sync_profile_combo_tooltip(self):
-        profile=get_run_profile(self.profile_combo.currentData())
-        tip=f"{profile.get('title')}：{profile.get('subtitle')}"
-        switches=profile.get("switches") or {}
-        tip += (
-            f"\nDEVICE_MODE={switches.get('DEVICE_MODE')}"
-            f"\nLAB_LIDAR={switches.get('USE_LAB_LIDAR_ALGO')}"
-            f"  LAB_CAMERA={switches.get('USE_LAB_CAMERA_ALGO')}"
-            f"\nALLOW_DEMO={switches.get('ALLOW_DEMO_DEVICE_DATA')}"
-            f"  REAL_MOTION={switches.get('ALLOW_REAL_MOTION')}"
-        )
-        self.profile_combo.setToolTip(tip)
 
-    def _on_run_profile_changed(self, _index: int = 0):
-        if self._profile_changing:
-            return
-        profile_id=str(self.profile_combo.currentData() or "field")
-        if profile_id == str(feature_switches.RUN_PROFILE or ""):
-            self._sync_profile_combo_tooltip()
-            return
-        if self.controller.running or self._step_busy or self.timer.isActive():
-            reply=QMessageBox.question(
-                self,
-                "切换运行模式",
-                "当前流程正在运行。切换模式会重置控制器并重建设备连接，是否继续？",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                self._profile_changing=True
-                found=self.profile_combo.findData(str(feature_switches.RUN_PROFILE or "field"))
-                if found>=0: self.profile_combo.setCurrentIndex(found)
-                self._profile_changing=False
-                return
-        self._apply_run_profile(profile_id)
 
-    def _apply_run_profile(self, profile_id: str):
-        self.timer.stop()
-        self._step_busy=False
-        old_plan=list(getattr(self.controller, "queue", []) or [])
-        old_debug=deepcopy(getattr(self.controller, "debug_inputs", {}) or self.debug_inputs)
-        applied=apply_run_profile(profile_id, persist=True)
-        self.controller=FlowController()
-        self.controller.set_state_listener(self.motionSnapshot.emit)
-        self.controller.set_plc_command_listener(self.plcCommandReady.emit)
-        self.controller.set_corner_review_callback(self._review_corners)
-        self._plc_cmd_queue.clear()
-        self._latest_plc_cmd=None
-        self._latest_plc_batch=[]
-        if self.plc_dialog is not None:
-            self.plc_dialog.clear_command()
-        self._sync_auto_push_policy()
-        if old_plan:
-            self.controller.set_plan(old_plan)
-        else:
-            self._load_plan()
-        if old_debug:
-            self.debug_inputs=old_debug
-            self.controller.set_debug_inputs(old_debug)
-        else:
-            self.debug_inputs=self.controller.default_debug_inputs()
-        self._sync_profile_combo_tooltip()
-        self.controller.twin.add_message(
-            "RUN_PROFILE",
-            "INFO",
-            f"已切换运行模式：{applied.get('title')}（{applied.get('id')}）",
-            applied.get("switches") or {},
-        )
-        self._apply_ui_mode()
-        self._refresh()
 
-    def _is_lab_ui(self) -> bool:
-        """实验室与真实环境共用循环流程 UI；完全模拟仍用旧 12 步界面。"""
-        return str(feature_switches.RUN_PROFILE or "").strip().lower() in {"lab", "field"}
+    def _is_field_ui(self) -> bool:
+        return True
 
     def _device_badge_defs(self) -> list[tuple[str, str]]:
         """顶栏外设灯：现场模式拆成海康/梅卡两台相机。"""
@@ -787,24 +688,12 @@ class MainWindow(QMainWindow):
             layout.addWidget(badge, 0)
 
     def _apply_ui_mode(self) -> None:
-        lab = self._is_lab_ui()
-        if hasattr(self, "field_flow_card"):
-            self.field_flow_card.setVisible(not lab)
-        if hasattr(self, "lab_flow_card"):
-            self.lab_flow_card.setVisible(lab)
-        if hasattr(self, "truck_card"):
-            self.truck_card.setVisible(not lab)
-        if hasattr(self, "field_right_panel"):
-            self.field_right_panel.setVisible(not lab)
-        if hasattr(self, "lab_right_panel"):
-            self.lab_right_panel.setVisible(lab)
-        if hasattr(self, "debug_btn"):
-            self.debug_btn.setVisible(not lab)
-        self._rebuild_device_status_badges()
-        self.setWindowTitle("装载数字孪生监控台")
-        if hasattr(self, "main_splitter"):
-            # 左栏中间量多，加宽；右栏收窄，相机/雷达参数走专用页
-            self.main_splitter.setSizes([360, 900, 260] if not lab else [340, 920, 280])
+        self.field_flow_card.setVisible(True)
+        self.truck_card.setVisible(False)
+        self.detail_right_panel.setVisible(False)
+        self.field_right_panel.setVisible(True)
+        self.debug_btn.setVisible(True)
+        self.main_splitter.setSizes([340, 920, 280])
 
     @staticmethod
     def _first_image(value):
@@ -1077,10 +966,10 @@ class MainWindow(QMainWindow):
             self._show_plc_dialog()
             return
         if self._step_busy: return
-        resume_lab_auto = bool(
-            self._lab_auto_waiting_for_manual_place
-            and self._is_lab_ui()
-            and self.controller.current_step[0] == "LAB_WAIT_MANUAL_PLACE"
+        resume_field_auto = bool(
+            self._field_auto_waiting_for_manual_place
+            and self._is_field_ui()
+            and self.controller.current_step[0] == "FIELD_WAIT_MANUAL_PLACE"
         )
         self._begin_step_run()
         try:
@@ -1098,8 +987,8 @@ class MainWindow(QMainWindow):
             self._handle_step_failure(e, from_auto=False)
         finally:
             self._end_step_run()
-        if resume_lab_auto and not self.controller.finished:
-            self._lab_auto_waiting_for_manual_place=False
+        if resume_field_auto and not self.controller.finished:
+            self._field_auto_waiting_for_manual_place=False
             self.timer.start()
             self.auto_btn.setText("暂停")
             self._sync_auto_push_policy()
@@ -1124,8 +1013,8 @@ class MainWindow(QMainWindow):
             self._update_step_controls()
             return
         if self._step_busy: return
-        if self._is_lab_ui() and self.controller.running and self.controller.current_step[0] == "LAB_WAIT_MANUAL_PLACE":
-            self._lab_auto_waiting_for_manual_place=True
+        if self._is_field_ui() and self.controller.running and self.controller.current_step[0] == "FIELD_WAIT_MANUAL_PLACE":
+            self._field_auto_waiting_for_manual_place=True
             self.timer.stop()
             self.auto_btn.setText("自动运行")
             self._sync_auto_push_policy()
@@ -1147,6 +1036,31 @@ class MainWindow(QMainWindow):
             self._handle_step_failure(e, from_auto=True)
         finally:
             self._end_step_run()
+
+    def _reload_offline_debug_inputs(self):
+        from config.offline_debug_inputs import build_debug_inputs_from_offline
+        self.debug_inputs = build_debug_inputs_from_offline(self.debug_inputs)
+        self.controller.set_debug_inputs(self.debug_inputs)
+
+    def _choose_radar_pcd(self):
+        from config.radar_input import PCD_DIRECTORY, save_selected_radar_pcd
+        path, _ = QFileDialog.getOpenFileName(self, "选择第2步雷达 PCD", str(PCD_DIRECTORY), "PCD (*.pcd)")
+        if not path:
+            return
+        try:
+            selected = save_selected_radar_pcd(path)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "雷达 PCD 无法读取", str(exc))
+            return
+        self.debug_inputs["selected_radar_pcd"] = selected
+        self.debug_inputs["point_cloud_path"] = selected
+        self.debug_inputs["point_cloud_example_only"] = False
+        self.controller.set_debug_inputs(self.debug_inputs)
+        self.controller.round_data.pop("radar_result", None)
+        self.radar_pcd_label.setText("第2步雷达 PCD：" + selected)
+        self.radar_pcd_label.setToolTip(selected)
+        self.controller.twin.add_message("RADAR_INPUT", "INFO", "第2步将处理所选 PCD", {"pcd_path": selected})
+        self._refresh()
 
     def _debug(self):
         d=DebugInputDialog(self.debug_inputs,self)
@@ -1185,7 +1099,7 @@ class MainWindow(QMainWindow):
             )
 
     def _plc_blocks_flow(self) -> bool:
-        if self._is_lab_ui():
+        if self._is_field_ui():
             return False
         dlg = self.plc_dialog
         return bool(dlg is not None and dlg.is_blocking())
@@ -1234,7 +1148,7 @@ class MainWindow(QMainWindow):
             batch.append(self._plc_cmd_queue.pop(0))
         self._latest_plc_batch = batch
         self._latest_plc_cmd = batch[0]
-        if self._is_lab_ui():
+        if self._is_field_ui():
             push = self._push_plc_batch(batch)
             status = "SUCCESS" if push.get("success") else "FAILED"
             self.controller.twin.add_message(
@@ -1265,7 +1179,7 @@ class MainWindow(QMainWindow):
         self._update_step_controls()
 
     def _handle_plc_push_failure(self, batch: list, push: dict) -> None:
-        """实验室自动下发失败时复用统一的三选项失败弹窗。"""
+        """现场自动下发失败时复用统一的三选项失败弹窗。"""
         action = self._ask_continue_after_failure(
             RuntimeError(str(push.get("message") or "PLC 运动下发失败")),
             code="PLC_PUSH",
@@ -1333,26 +1247,26 @@ class MainWindow(QMainWindow):
         if self.isVisible():
             loop=QEventLoop(self); QTimer.singleShot(460,loop.quit); loop.exec()
 
-    def _pump_lab_camera_preview(self):
+    def _pump_field_camera_preview(self):
         """PLC 轮询时仅放行后台画面刷新，不响应新的鼠标/键盘操作。"""
         QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
 
     def _refresh_flow_chain(self,s):
         # DONE=已跑完；RUN=本点击正在执行的那一格；WAIT=等待用户点「执行下一步」或尚未轮到
         # 注意：execute_next 结束后 step_code 已指向「下一格」，不能用它+busy 画 RUN，否则会误亮下一格。
-        lab = self._is_lab_ui()
-        stages = self.LAB_FLOW_STAGES if lab else self.FLOW_STAGES
-        nodes = self.lab_flow_nodes if lab else self.flow_nodes
+        field = self._is_field_ui()
+        stages = self.FIELD_FLOW_STAGES
+        nodes = self.field_flow_nodes
         if s.get("finished"):
-            current_stage = 5 if lab else 13
+            current_stage = 5
         elif not s.get("running") and not s.get("results"):
             current_stage=0
         else:
             current_stage=self.STEP_STAGE.get(s.get("step_code"),1)
-            if lab and s.get("step_code") == "DONE":
+            if field and s.get("step_code") == "DONE":
                 current_stage = 5
-        skipped=set() if lab else ({4,5,6,7} if not s.get("first_round") else set())
-        if lab and not s.get("first_round"):
+        skipped=set()
+        if field and not s.get("first_round"):
             skipped = {1}  # 后续轮跳过设备检查
         running=int(self._running_stage or 0) if self._step_busy else 0
         light=is_light_theme()
@@ -1381,7 +1295,7 @@ class MainWindow(QMainWindow):
         busy = bool(self._step_busy or self._plc_blocks_flow() or self.controller.finished)
         if hasattr(self, "next_btn"):
             self.next_btn.setEnabled(not busy)
-            if self._is_lab_ui() and self.controller.current_step[0] == "LAB_WAIT_MANUAL_PLACE":
+            if self._is_field_ui() and self.controller.current_step[0] == "FIELD_WAIT_MANUAL_PLACE":
                 self.next_btn.setText("确认已放好，开始拍照检测")
             else:
                 self.next_btn.setText("执行下一步")
@@ -1391,87 +1305,26 @@ class MainWindow(QMainWindow):
 
     def _refresh(self,s=None):
         s=s or self.controller.snapshot(); t=s["twin"]; self.bridge.update_state(t); self._refresh_flow_chain(s)
-        lab = self._is_lab_ui()
-        mode_text = ("实验室首轮建图" if s["first_round"] else "实验室 B 列循环") if lab else ("首轮建图" if s["first_round"] else "循环装载（跳过雷达/角点）")
+        field = self._is_field_ui()
+        mode_text = ("现场首轮建图" if s["first_round"] else "现场 B 列循环")
         self.phase.setText(f"第 {s['round']} 轮 · {mode_text} · {s['step_name']}"); self.progress.setText(f"{s['completed']} / {s['total']}")
         rd=s.get("round_data") or {}; cargo=t.get("cargo") or {}; p=cargo.get("pose") or {}; truck=t.get("truck") or {}; target=truck.get("current_target") or {}; tp=target.get("final_world_pose") or {}; fb=t.get("feedback_compensation_mm") or {}
         self.board_data_panel.update_from_round_data(rd)
         hole=((rd.get("pick_result") or {}).get("hole_result") or {})
         self._refresh_live_metrics(s, t, rd)
-        if lab:
-            self._fill_kv(self.cargo_table,[
-                ("货物编号",cargo.get("instance_id") or cargo.get("cargo_code","-")),
-                ("名称",cargo.get("cargo_name","-")),
-                ("状态",cargo.get("status","-")),
-                ("尺寸 mm",f"{cargo.get('length_mm','-')} × {cargo.get('width_mm','-')} × {cargo.get('height_mm','-')}"),
-                ("当前 WORLD XYZ",f"{p.get('x_mm','-')}, {p.get('y_mm','-')}, {p.get('z_mm','-')}"),
-                ("插孔识别", (rd.get("pick_result") or {}).get("message","等待第2步")),
-                ("雷达粗定位", (rd.get("radar_result") or {}).get("message","等待第2步")),
-                ("相机精定位", (rd.get("lab_corner_shell") or {}).get("message","等待第3步")),
-                ("放货前监测", (rd.get("lab_pre_place_monitor") or {}).get("message","首件无需放前监测")),
-                ("放货后检测", (rd.get("lab_place_verify") or {}).get("message","请手动放到当前 B 区后执行检测")),
-            ])
-            self._refresh_lab_sense_panels(s, rd, hole, truck)
-        else:
-            self._fill_kv(self.cargo_table,[
-                ("货物编号",cargo.get("instance_id") or cargo.get("cargo_code","-")),("名称",cargo.get("cargo_name","-")),("状态",cargo.get("status","-")),
-                ("随动绑定",cargo.get("attached_to") or "已释放 / 未插取"),
-                ("尺寸 mm",f"{cargo.get('length_mm','-')} × {cargo.get('width_mm','-')} × {cargo.get('height_mm','-')}"),("当前 WORLD XYZ",f"{p.get('x_mm','-')}, {p.get('y_mm','-')}, {p.get('z_mm','-')}"),
-                ("目标盲码",target.get("blind_code","-")),("目标 WORLD XYZ",f"{tp.get('x_mm','-')}, {tp.get('y_mm','-')}, {tp.get('z_mm','-')}"),
-                ("步骤2 偏移%",(rd.get("pre_pick_offset") or {}).get("overhang_percent","-")),
-                ("放置前动态监测",json.dumps({k:(rd.get("pre_place_monitor") or {}).get(k) for k in ("corner_xyz_m","offset_deg")},ensure_ascii=False)),
-                ("放置后底层托盘",json.dumps({k:(rd.get("post_place_bottom_pallet") or {}).get(k) for k in ("corner_xyz_m","offset_deg")},ensure_ascii=False)),
-                ("10.1 区域偏差",json.dumps(((rd.get("post_region") or {}).get("region_deviation") or {}).get("next_pallet_compensation_world_mm",{}),ensure_ascii=False)),
-                ("10.2 货物/托盘偏移mm",(rd.get("post_cargo_offset") or {}).get("offset_distance_mm","-")),
-                ("下一托盘 WORLD 反馈",json.dumps(fb,ensure_ascii=False)),
-            ])
-            trp=truck.get("pose") or {}; geom=truck.get("camera_board_geometry") or {}
-            self._fill_kv(self.truck_table,[
-                ("车辆编号",truck.get("truck_id")),("坐标系","world / mm；X右 Y车辆前进 Z向上"),("车辆 XYZ",f"{trp.get('x_mm')}, {trp.get('y_mm')}, {trp.get('z_mm')}"),
-                ("车辆 RPY",f"{trp.get('roll_deg')}, {trp.get('pitch_deg')}, {trp.get('yaw_deg')}"),("车板类型",truck.get("board_mode")),
-                ("板型判断来源",geom.get("decision_source","-")),("相机最终角点数",len(truck.get("corners") or {})),("高低差 mm",geom.get("height_difference_mm","-")),
-                ("可用区域",len(truck.get("available") or [])),("已占用区域",len(truck.get("occupied") or [])),("借位规划",json.dumps(geom.get("borrow_plan"),ensure_ascii=False)),
-            ])
-            corners=truck.get("corners") or {}; self.corner_table.setRowCount(0)
-            for pid in sorted(corners,key=lambda x:int(x[1:]) if x[1:].isdigit() else 999):
-                q=corners[pid]; r=self.corner_table.rowCount(); self.corner_table.insertRow(r)
-                for c,val in enumerate([pid,q.get("x"),q.get("y"),q.get("z")]): self.corner_table.setItem(r,c,QTableWidgetItem(str(val)))
-
-            self.device_table.setRowCount(0); rows=[]
-            compact=self.width()<1500
-            for column in (1,2,5): self.device_table.setColumnHidden(column,compact)
-            for did,d in (t.get("devices") or {}).items(): rows.append((did,d.get("kind"),"-",d.get("status"),d.get("pose") or {},d.get("task","-")))
-            for cid,c in (t.get("cameras") or {}).items(): rows.append((cid,"arm_camera",c.get("parent_robot_id"),c.get("status"),c.get("world_pose") or {},c.get("task","-")))
-            for did,kind,parent,status,pp,task in rows:
-                r=self.device_table.rowCount(); self.device_table.insertRow(r); vals=[did,kind,parent,status,f"{pp.get('x_mm','-'):.0f}, {pp.get('y_mm','-'):.0f}, {pp.get('z_mm','-'):.0f}" if pp else "-",f"{pp.get('roll_deg','-')}, {pp.get('pitch_deg','-')}, {pp.get('yaw_deg','-')}",task]
-                for c,val in enumerate(vals): self.device_table.setItem(r,c,QTableWidgetItem(str(val)))
-            self._refresh_sensor_panels(t, rd, truck)
-
-            self.space_table.setRowCount(0)
-            for reg in truck.get("regions") or []:
-                center=reg.get("center_world_xyz_mm") or [0,0,0]; support=f"{reg.get('support_height_compensation_mm',0):.1f}mm" if reg.get("requires_support_block") else "-"
-                vals=[reg.get("blind_code") or reg.get("region_id"),reg.get("section"),reg.get("column"),f"{center[0]:.0f},{center[1]:.0f},{center[2]:.0f}",support,reg.get("status"),reg.get("cargo_id") or "-"]
-                r=self.space_table.rowCount(); self.space_table.insertRow(r)
-                for c,val in enumerate(vals): self.space_table.setItem(r,c,QTableWidgetItem(str(val)))
-            self.comp.setText("8.2当前补偿："+json.dumps((rd.get("neighbor_pose") or {}).get("compensation_world_mm",{}),ensure_ascii=False)+"\n历史反馈："+json.dumps(fb,ensure_ascii=False)+"\n剩余空间："+json.dumps(truck.get("remaining_space") or {},ensure_ascii=False))
-
-            par=t.get("parallel") or {}; self.parallel_label.setText(f"3.1插取：{par.get('pick',{}).get('status')} ｜ 3.2雷达：{par.get('radar',{}).get('status')}")
-            cal=s.get("calibration") or {}
-            intr="参考/占位" if "PLACEHOLDER" in str(cal.get("intrinsic_parameter_status","")).upper() else str(cal.get("intrinsic_parameter_status","-"))
-            extr="占位" if "PLACEHOLDER" in str(cal.get("coordinate_parameter_status","")).upper() else str(cal.get("coordinate_parameter_status","-"))
-            profile=get_run_profile()
-            self.cal_label.setText(
-                f"运行模式：{profile.get('title')}（{profile.get('id')}）｜"
-                f"设备：{str(s.get('device_mode') or 'mock').upper()}｜"
-                f"标定：内参={intr}｜外参={extr}｜运动相机=实时位姿×安装外参"
-            )
-            self.cal_label.setToolTip(json.dumps(cal,ensure_ascii=False,indent=2))
-            db=s.get("database") or {}; db_location=str(db.get("location") or db.get("path") or "-")
-            db_name=("MySQL" if str(db.get("backend")).lower()=="mysql" else "SQLite")
-            self.database_label.setText(f"车辆数据库：{db_name}｜装载会话：{db.get('session_id') or '未开始'}")
-            self.database_label.setToolTip(db_location)
-            self._refresh_modules(s.get("module_evidence") or [])
-            msgs=t.get("messages") or []; self.message.setPlainText("\n".join(f"[{m.get('time')}] {m.get('source')} {m.get('status')}  {m.get('message')}" for m in msgs[-30:]))
+        self._fill_kv(self.cargo_table,[
+            ("货物编号",cargo.get("instance_id") or cargo.get("cargo_code","-")),
+            ("名称",cargo.get("cargo_name","-")),
+            ("状态",cargo.get("status","-")),
+            ("尺寸 mm",f"{cargo.get('length_mm','-')} × {cargo.get('width_mm','-')} × {cargo.get('height_mm','-')}"),
+            ("当前 WORLD XYZ",f"{p.get('x_mm','-')}, {p.get('y_mm','-')}, {p.get('z_mm','-')}"),
+            ("插孔识别", (rd.get("pick_result") or {}).get("message","等待第2步")),
+            ("雷达粗定位", (rd.get("radar_result") or {}).get("message","等待第2步")),
+            ("相机精定位", (rd.get("field_corner_shell") or {}).get("message","等待第3步")),
+            ("放货前监测", (rd.get("field_pre_place_monitor") or {}).get("message","首件无需放前监测")),
+            ("放货后检测", (rd.get("field_place_verify") or {}).get("message","请手动放到当前 B 区后执行检测")),
+        ])
+        self._refresh_field_sense_panels(s, rd, hole, truck)
 
         self._refresh_ext_devices(s)
         msgs=t.get("messages") or []
@@ -1480,7 +1333,7 @@ class MainWindow(QMainWindow):
         if getattr(self, "_center_tab_index", 0) == 2:
             self._refresh_history_gallery(force=False)
 
-    def _render_lab_camera_entry(self, entry: dict, gallery_n: int) -> None:
+    def _render_field_camera_entry(self, entry: dict, gallery_n: int) -> None:
         image = str(entry.get("image_path") or entry.get("result_image_path") or "")
         caption = str(entry.get("title") or "相机视图")
         status = str(entry.get("status") or "")
@@ -1489,20 +1342,20 @@ class MainWindow(QMainWindow):
             pix = QPixmap(image)
             if not pix.isNull():
                 scaled = pix.scaled(
-                    max(240, self.lab_camera_preview.width() - 8),
-                    max(180, self.lab_camera_preview.height() - 8),
+                    max(240, self.field_camera_preview.width() - 8),
+                    max(180, self.field_camera_preview.height() - 8),
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
-                self.lab_camera_preview.setPixmap(scaled)
-                self.lab_camera_preview.setText("")
-                self.lab_camera_preview.setToolTip(f"{caption}\n{image}")
+                self.field_camera_preview.setPixmap(scaled)
+                self.field_camera_preview.setText("")
+                self.field_camera_preview.setToolTip(f"{caption}\n{image}")
             else:
-                self.lab_camera_preview.setPixmap(QPixmap())
-                self.lab_camera_preview.setText(f"无法加载图片：\n{image}")
+                self.field_camera_preview.setPixmap(QPixmap())
+                self.field_camera_preview.setText(f"无法加载图片：\n{image}")
         else:
-            self.lab_camera_preview.setPixmap(QPixmap())
-            self.lab_camera_preview.setText(caption or "等待拍照")
+            self.field_camera_preview.setPixmap(QPixmap())
+            self.field_camera_preview.setText(caption or "等待拍照")
         bits = [caption]
         if status:
             bits.append(f"状态={status}")
@@ -1510,20 +1363,20 @@ class MainWindow(QMainWindow):
             bits.append(message)
         if gallery_n:
             bits.append(f"本轮已拍 {gallery_n} 次")
-        self.lab_camera_caption.setText("｜".join(bits))
+        self.field_camera_caption.setText("｜".join(bits))
 
-    def _on_lab_camera_history_changed(self, index: int) -> None:
-        entries = getattr(self, "_lab_camera_entries", [])
+    def _on_field_camera_history_changed(self, index: int) -> None:
+        entries = getattr(self, "_field_camera_entries", [])
         if 0 <= int(index) < len(entries):
-            self._render_lab_camera_entry(entries[int(index)], len(entries))
+            self._render_field_camera_entry(entries[int(index)], len(entries))
 
-    def _refresh_lab_sense_panels(self, s: dict, rd: dict, hole: dict, truck: dict) -> None:
-        """实验室右侧：最新照片+标注图、当前识别点、底板角点。"""
-        latest = s.get("lab_latest_camera_view") or rd.get("lab_latest_camera_view") or {}
-        place = rd.get("lab_place_verify") or {}
-        pre_monitor = rd.get("lab_pre_place_monitor") or {}
+    def _refresh_field_sense_panels(self, s: dict, rd: dict, hole: dict, truck: dict) -> None:
+        """现场右侧：最新照片+标注图、当前识别点、底板角点。"""
+        latest = s.get("field_latest_camera_view") or rd.get("field_latest_camera_view") or {}
+        place = rd.get("field_place_verify") or {}
+        pre_monitor = rd.get("field_pre_place_monitor") or {}
         pick = rd.get("pick_result") or {}
-        corner = rd.get("lab_corner_shell") or {}
+        corner = rd.get("field_corner_shell") or {}
 
         image = str(latest.get("image_path") or "")
         fallback = dict(latest)
@@ -1552,26 +1405,26 @@ class MainWindow(QMainWindow):
                     "title": "等待拍照",
                 }
 
-        gallery = list(s.get("lab_camera_gallery") or rd.get("lab_camera_gallery") or [])
+        gallery = list(s.get("field_camera_gallery") or rd.get("field_camera_gallery") or [])
         entries = [dict(item) for item in gallery if isinstance(item, dict)]
         signature = tuple((str(item.get("time") or ""), str(item.get("image_path") or ""), str(item.get("title") or "")) for item in entries)
-        if signature != getattr(self, "_lab_camera_gallery_signature", ()):
-            self._lab_camera_gallery_signature = signature
-            self._lab_camera_entries = entries
-            self.lab_camera_history.blockSignals(True)
-            self.lab_camera_history.clear()
+        if signature != getattr(self, "_field_camera_gallery_signature", ()):
+            self._field_camera_gallery_signature = signature
+            self._field_camera_entries = entries
+            self.field_camera_history.blockSignals(True)
+            self.field_camera_history.clear()
             for index, item in enumerate(entries, start=1):
-                self.lab_camera_history.addItem(f"{index}. {item.get('title') or item.get('step') or '相机拍照'}")
-            self.lab_camera_history.setCurrentIndex(len(entries) - 1)
-            self.lab_camera_history.blockSignals(False)
+                self.field_camera_history.addItem(f"{index}. {item.get('title') or item.get('step') or '相机拍照'}")
+            self.field_camera_history.setCurrentIndex(len(entries) - 1)
+            self.field_camera_history.blockSignals(False)
         selected = fallback
-        index = self.lab_camera_history.currentIndex() if entries else -1
+        index = self.field_camera_history.currentIndex() if entries else -1
         if 0 <= index < len(entries):
             selected = entries[index]
-        self._render_lab_camera_entry(selected, len(entries))
+        self._render_field_camera_entry(selected, len(entries))
 
         # 此表固定只显示传统算法输出的两个托盘插孔 WORLD 坐标；纸箱坐标不在界面输出。
-        self.lab_hole_table.setRowCount(0)
+        self.field_hole_table.setRowCount(0)
         for side, label in (("left", "左插孔"), ("right", "右插孔")):
             world = hole.get(f"{side}_world_xyz_mm")
             cam = hole.get(f"{side}_xyz_mm")
@@ -1579,39 +1432,13 @@ class MainWindow(QMainWindow):
             if xyz is None:
                 continue
             frame = "WORLD" if world is not None else "相机"
-            r = self.lab_hole_table.rowCount()
-            self.lab_hole_table.insertRow(r)
-            vals = [f"{label}({frame})", f"{float(xyz[0]):.1f}", f"{float(xyz[1]):.1f}", f"{float(xyz[2]):.1f}"]
+            r = self.field_hole_table.rowCount()
+            self.field_hole_table.insertRow(r)
+            vals = [f"{label}({frame})", *[str(round_measurement(v)) for v in xyz[:3]]]
             for c, val in enumerate(vals):
-                self.lab_hole_table.setItem(r, c, QTableWidgetItem(str(val)))
+                self.field_hole_table.setItem(r, c, QTableWidgetItem(str(val)))
 
-        final_corners = corner.get("final_world_corners") or {}
-        camera_corners = corner.get("camera_world_corners") or {}
-        radar = rd.get("radar_result") or {}
-        radar_corners = radar.get("world_points") or {}
-        corners = final_corners or camera_corners or radar_corners or truck.get("corners") or {}
-        ids = list(corners.keys()) or list(radar.get("corner_ids") or [])
-        ids = sorted(ids, key=lambda x: int(str(x)[1:]) if str(x)[1:].isdigit() else 999)
-        self.lab_radar_table.setRowCount(0)
-        for pid in ids:
-            q = corners.get(pid) or {}
-            source = q.get("source")
-            if not source:
-                if pid in camera_corners:
-                    source = "camera_yolo"
-                elif pid in radar_corners:
-                    source = "lidar"
-                else:
-                    source = "-"
-            xyz = q
-            if "final_world_xyz_mm" in q and isinstance(q.get("final_world_xyz_mm"), (list, tuple)):
-                xyz = {"x": q["final_world_xyz_mm"][0], "y": q["final_world_xyz_mm"][1], "z": q["final_world_xyz_mm"][2]}
-            r = self.lab_radar_table.rowCount()
-            self.lab_radar_table.insertRow(r)
-            vals = [pid, xyz.get("x"), xyz.get("y"), xyz.get("z"), source]
-            for c, val in enumerate(vals):
-                text = f"{float(val):.1f}" if isinstance(val, (int, float)) else str(val)
-                self.lab_radar_table.setItem(r, c, QTableWidgetItem(text))
+        update_radar_world_corner_table(self.field_radar_table, rd, self.controller.calibration)
 
     def _refresh_sensor_panels(self, t: dict, rd: dict, truck: dict):
         """右侧「相机 / 雷达」页：设备参数 + 本轮角点结果。"""
@@ -1629,7 +1456,7 @@ class MainWindow(QMainWindow):
         corner_check=check.get("CAM_CORNER") or {}
         radar_check=check.get("RADAR") or {}
         radar_result=rd.get("radar_result") or {}
-        corner_shell=rd.get("lab_corner_shell") or rd.get("corner_result") or {}
+        corner_shell=rd.get("field_corner_shell") or rd.get("corner_result") or {}
         if hasattr(self, "camera_param_table"):
             rows=[
                 ("状态", cam.get("status") or "-"),
@@ -1696,7 +1523,7 @@ class MainWindow(QMainWindow):
                 source=str(corner_shell.get("source") or truck.get("board_mode") or "-")
             r=self.sensor_corner_table.rowCount(); self.sensor_corner_table.insertRow(r)
             for c,val in enumerate([pid,x,y,z,source]):
-                text=f"{float(val):.1f}" if isinstance(val,(int,float)) else str(val if val is not None else "-")
+                text=str(round_measurement(val)) if isinstance(val,(int,float)) else str(val if val is not None else "-")
                 self.sensor_corner_table.setItem(r,c,QTableWidgetItem(text))
 
     def _refresh_ext_devices(self,s):

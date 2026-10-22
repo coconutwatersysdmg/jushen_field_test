@@ -80,18 +80,20 @@ def camera_corner_groups(points: Mapping[str, Any]) -> List[List[Any]]:
     return [[points[point_id] for point_id in ids] for ids in group_ids]
 
 
-def _radar_metrics(board: Any) -> Dict[str, float] | None:
+def _radar_metrics(board: Any) -> Dict[str, float | None] | None:
     if not isinstance(board, Mapping):
         return None
     try:
-        metrics = {key: float(board[key]) for key in METRIC_KEYS}
+        metrics = {key: (None if key == 'height_mean_mm' and board.get(key) is None
+                        else float(board[key])) for key in METRIC_KEYS}
     except (KeyError, TypeError, ValueError):
         return None
-    return metrics if all(isfinite(value) for value in metrics.values()) else None
+    return metrics if all(value is None or isfinite(value) for value in metrics.values()) else None
 
 
 def _camera_world_corners(round_data: Mapping[str, Any]) -> Mapping[str, Any]:
-    shell = round_data.get("lab_corner_shell")
+    # Retain reads of previously saved snapshots while new runs use field keys.
+    shell = round_data.get("field_corner_shell") or round_data.get("lab_corner_shell")
     if isinstance(shell, Mapping):
         nested = shell.get("camera_world_corners")
         if isinstance(nested, Mapping) and nested:
@@ -168,11 +170,15 @@ def _radar_fixed_world_data(
     raw_boards = raw_reference.get("boards") if isinstance(raw_reference, Mapping) else None
     if isinstance(raw_boards, (list, tuple)) and any(_board_points(board) for board in raw_boards):
         board_sources = [_board_points(board) for board in raw_boards]
-        native_geometry = True
+        reference_frame = str(raw_reference.get("coordinate_frame") or "").lower()
+        boards_in_world = all(
+            str(board.get("coordinate_frame") or "").lower() == "world"
+            for board in raw_boards if _board_points(board)
+        )
+        native_geometry = reference_frame != "world" and not boards_in_world
     else:
         boards = radar_result.get("boards")
         board_sources = [_board_points(board) for board in boards] if isinstance(boards, (list, tuple)) else []
-        board_sources = [points for points in board_sources if points]
         native_geometry = str(radar_result.get("coordinate_frame") or "world").lower() in {
             "radar", "lidar", "sensor", "radar_world", "lidar_world",
         }
@@ -207,8 +213,8 @@ def _radar_fixed_world_data(
                 point = _transform_xyz(value, lidar_world_matrix) if native_geometry else _fixed_xyz(value)
                 flattened[point_id] = point
                 converted.append(point)
-            if len(converted) == 4:
-                groups.append(converted)
+            # Preserve deck slots when a missing H withholds one deck's XYZ.
+            groups.append(converted if len(converted) == 4 else [])
     except (TypeError, ValueError, IndexError, KeyError):
         return {}, [], native_geometry
     return flattened, groups, native_geometry
@@ -242,6 +248,10 @@ def build_board_data(
     source = round_data if isinstance(round_data, Mapping) else {}
     radar_result = source.get("radar_result")
     radar_boards = radar_result.get("boards") if isinstance(radar_result, Mapping) else []
+    if not radar_boards and isinstance(radar_result, Mapping):
+        reference = radar_result.get('raw_radar_reference')
+        if isinstance(reference, Mapping):
+            radar_boards = reference.get('boards')
     radar_boards = radar_boards if isinstance(radar_boards, (list, tuple)) else []
     _radar_points, radar_groups, native_geometry = _radar_fixed_world_data(source, lidar_world_matrix)
     transformed_radar_metrics: List[Dict[str, float] | None] = []
@@ -266,6 +276,25 @@ def build_board_data(
             radar = None
         else:
             radar = _radar_metrics(radar_boards[index]) if index < len(radar_boards) else None
+        # A current WORLD deck H is computed from supported source regions,
+        # independently of the four corner Z values. Native historical geometry
+        # still needs its existing full WORLD transform/recomputation.
+        board = radar_boards[index] if index < len(radar_boards) else None
+        if radar is None and not native_geometry and isinstance(board, Mapping):
+            radar = _radar_metrics(board)
+        if (not native_geometry and isinstance(board, Mapping)
+                and board.get('geometry_revision') == 'head_near_anchors_v3'):
+            # Current measurements were computed from full-precision geometry.
+            # Recomputing from integer corners can introduce a one-mm drift.
+            radar = _radar_metrics(board)
+        estimation = board.get('height_estimation') if isinstance(board, Mapping) else None
+        if radar is not None and not native_geometry and isinstance(estimation, Mapping) and estimation.get('method') in {
+            'front_five_strip_planes', 'grid_balanced_five_strip_planes',
+            'five_center_neighborhood_medians', 'whole_region_plane',
+            'geometry_incomplete',
+        }:
+            radar = dict(radar)
+            radar['height_mean_mm'] = board.get('height_mean_mm') if estimation.get('status') == 'supported' else None
         result.append({
             "title": title,
             "radar": radar,
