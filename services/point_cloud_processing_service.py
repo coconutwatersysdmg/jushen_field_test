@@ -98,6 +98,7 @@ class PointCloudProcessingService:
 
         # 保留算法包自身默认参数，仅把系统配置中明确给出的常用参数覆盖进去。
         supported = {
+            "truck_rotation_z_deg",
             "geometry_scheme",
             "pointnet_num_point",
             "pointnet_num_votes",
@@ -300,11 +301,13 @@ class PointCloudProcessingService:
             "timing": {
                 "preprocess": record.get("preprocess_timing"),
                 "pointnet": record.get("pointnet_timing"),
+                "truck_rotation_s": record.get("truck_rotation_s"),
                 "geometry_s": record.get("geometry_s"),
                 "total_s": record.get("total_s"),
             },
             "stage_counts": record.get("stage_counts"),
             "dense_label_counts": record.get("dense_label_counts"),
+            "truck_rotation": record.get("truck_rotation"),
             "message": (
                 f"雷达点云处理完成：{normalized.get('board_count', 0)} 块车板，"
                 f"{len(normalized.get('corner_ids') or [])} 个 3D 角点"

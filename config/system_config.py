@@ -21,6 +21,8 @@ import config.feature_switches as feature_switches
 
 SYSTEM_CONFIG: Dict[str, Any] = {
     "point_cloud": {
+        # PointNet 提取/分割卡车后，绕 Z 轴旋转 XY，再进行角点与高度几何计算。
+        "truck_rotation_z_deg": -1.0,
         # 边界拟合仅保留方案二；不再支持方案一或自动回退。
         "geometry_scheme": 2,
         # 高度取值方案A/B/C/D，与二维边界拟合分别控制。

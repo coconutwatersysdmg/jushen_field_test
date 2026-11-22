@@ -3,6 +3,7 @@
 Current production flow:
     PCD -> ROI -> voxel downsample -> main-plane removal -> DBSCAN
     -> statistical filter -> PointNet++ fixed-size direct coverage inference
+    -> extracted truck Z rotation
     -> board-plane RANSAC -> projected head/near anchors / shared deck boundary
     -> per-deck H assigned to four corner Z -> WORLD geometry -> loading plan
     -> output/json/<name>.json
@@ -72,6 +73,9 @@ class PipelineConfig:
     # 统计离群点滤波
     stat_neighbors: int = 6
     stat_std_ratio: float = 3.0
+
+    # Historical extracted-cloud XY correction: Z axis, radar origin, degrees.
+    truck_rotation_z_deg: float = -1.0
 
     # ------------------------------------------------------------------------
     # 3. PointNet++
@@ -152,6 +156,8 @@ class PipelineConfig:
     support_decision_mode: str = 'normal_concentration'
 
     def __post_init__(self):
+        if not np.isfinite(float(self.truck_rotation_z_deg)):
+            raise ValueError('truck_rotation_z_deg must be finite')
         if self.support_decision_mode not in ('normal_concentration','geometry_evidence','structural_evidence'):
             raise ValueError('Unsupported support_decision_mode')
         if self.geometry_scheme != 2:
@@ -389,6 +395,32 @@ def preprocess_point_cloud_timed(pcd, config: PipelineConfig):
         "stat_filtered": len(statistical.points),
     }
     return statistical, counts, timings
+
+
+def rotate_extracted_truck_xyz(xyz, angle_deg: float) -> np.ndarray:
+    """Rotate all extracted points around the radar origin's Z axis, once.
+
+    This matches the historical WORLD XY rotation about the lidar origin.
+    Keep Z and source rows unchanged; return independent corrected coordinates.
+    """
+    source = np.asarray(xyz)
+    dtype = np.float32 if source.dtype == np.float32 else np.float64
+    points = np.asarray(source, dtype=dtype)
+    angle = float(angle_deg)
+    if points.ndim != 2 or points.shape[1] != 3 or not np.isfinite(points).all():
+        raise ValueError('Truck rotation requires finite [N,3] XYZ points')
+    if not np.isfinite(angle):
+        raise ValueError('Truck rotation angle must be finite')
+    rotated = points.copy()
+    if angle == 0.0:
+        return rotated
+    # PCL stores XYZ and its rotation matrix as float32. Match its degree
+    # conversion and separate float32 products for actual extracted clouds.
+    radians = dtype(angle) * dtype(np.pi) / dtype(180.0)
+    cosine, sine = dtype(np.cos(float(radians))), dtype(np.sin(float(radians)))
+    rotated[:, 0] = points[:, 0] * cosine - points[:, 1] * sine
+    rotated[:, 1] = points[:, 0] * sine + points[:, 1] * cosine
+    return rotated
 
 
 def normalize_vector(vector) -> np.ndarray:
@@ -1082,11 +1114,28 @@ class PointCloudPipeline:
             dense_xyz
         )
 
+        rotation_start = time.perf_counter()
+        dense_xyz = rotate_extracted_truck_xyz(
+            dense_xyz, self.config.truck_rotation_z_deg,
+        ).astype(np.float32)
+        rotation_s = time.perf_counter() - rotation_start
+        truck_rotation = {
+            'axis': 'z',
+            'angle_deg': float(self.config.truck_rotation_z_deg),
+            'center_radar_xyz_mm': [0.0, 0.0, 0.0],
+            'equivalent_world_center_xy_mm': radar_to_world(np.zeros((1, 3)))[0, :2].tolist(),
+            'stage': 'after_pointnet_before_geometry',
+            'point_count': len(dense_xyz),
+            'applied': self.config.truck_rotation_z_deg != 0.0,
+        }
+        print(f"[TRUCK_ROTATE] axis=z angle={truck_rotation['angle_deg']:g}deg "
+              f"center=(0,0,0) points={len(dense_xyz)}", flush=True)
         result, geometry_steps, geometry_s = process_segmented_points_timed(
             dense_xyz,
             dense_labels,
             self.config,
         )
+        result['truck_rotation'] = truck_rotation
 
         json_path = output_root / "json" / f"{input_path.stem}.json"
         write_json(json_path, result)
@@ -1108,6 +1157,8 @@ class PointCloudPipeline:
             "json": str(json_path),
             "stage_counts": stage_counts,
             "dense_label_counts": dense_label_counts,
+            "truck_rotation": truck_rotation,
+            "truck_rotation_s": round(float(rotation_s), 6),
             "preprocess_timing": {
                 key: round(float(value), 6)
                 for key, value in preprocess_timings.items()
