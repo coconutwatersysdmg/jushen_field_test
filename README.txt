@@ -41,3 +41,11 @@ PCD 拷贝完成后才以正式文件名出现；拷贝失败会输出原因，�
 四、数据与算法
   不实时连相机/雷达；读离线 PCD / 图片。
   算法：现场 PointNet + 角点 YOLO。
+
+五、目录清理
+  关闭软件后，可清理历史输出 outputs/、临时文件 tmp/、转换器试验 workdir/converter_probe/、
+  logs/ 以及项目自身的 __pycache__/。清理会删除相应历史结果，不影响正常运行。
+  保留 .venv/、源码、config/、models/、算法 checkpoints/ 和 third_party/。
+  保留 PCD/、存itl/ 中的输入数据，以及 workdir/ 中的状态、设置和数据库，勿整目录删除 workdir/。
+  GitHub 备份保存源码、配置、模型和随项目附带的运行库；运行环境需按安装说明重建，采集数据另行保管。
+  outputs/、tmp/、日志、Python 缓存和 node_modules/ 已加入 .gitignore。
