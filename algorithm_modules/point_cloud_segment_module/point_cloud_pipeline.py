@@ -989,7 +989,7 @@ class PointCloudPipeline:
             if device.type == "cuda" else []
         )
         backend_flags = (
-            torch.backends.cudnn.flags(benchmark=False, deterministic=True)
+            torch.backends.cudnn.flags(benchmark=False, deterministic=True, allow_tf32=False)
             if cuda_devices else nullcontext()
         )
         try:
@@ -1049,6 +1049,7 @@ class PointCloudPipeline:
         )
 
         return dense_labels, label_counts, {
+            "device": str(self.segmenter.device),
             "dense_count": dense_count,
             "group_points": group_points,
             "group_count": group_count,
