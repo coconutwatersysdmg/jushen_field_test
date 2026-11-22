@@ -99,14 +99,16 @@ class PipelineConfig:
     corner_height_iterations: int = 160
     corner_height_max_slope: float = 0.5
 
-    # 单板参考高度：前60%长度，近雷达侧起95%宽度，五条带中心平面高度等权平均。
+    # 高度选区沿本板长度后移5%，宽度两侧各舍弃5%；五条带中心高度等权平均。
     # H独立于原角点Z估计，最终统一赋给本板四角。A/B/C/D均保留。
     height_scheme: str = 'A'
+    height_length_start_fraction: float = 0.05
+    height_width_start_fraction: float = 0.05
     single_height_length_fraction: float = 0.6
-    single_height_width_fraction: float = 0.95
+    single_height_width_fraction: float = 0.90
     high_height_length_fraction: float = 0.8
     low_height_length_fraction: float = 0.4
-    high_low_height_width_fraction: float = 0.95
+    high_low_height_width_fraction: float = 0.90
     single_height_min_points: int = 40
     single_height_min_tolerance: float = 15.0
     single_height_max_tolerance: float = 40.0
@@ -833,6 +835,15 @@ def process_segmented_points_timed(xyz, labels, config: PipelineConfig):
     from .shared_deck_geometry import process_shared_decks_timed
     result, rows, seconds = process_shared_decks_timed(xyz, labels, config)
     result['label_correction'] = label_correction
+    result, height_rows, height_seconds = apply_deck_reference_heights_timed(xyz, labels, result, config)
+    return result, rows + height_rows, seconds + height_seconds
+
+
+def apply_deck_reference_heights_timed(xyz, labels, result, config: PipelineConfig):
+    """Apply H and corner Z to existing geometry without refitting XY or labels."""
+    if config.height_scheme not in ('A', 'B', 'C', 'D'):
+        raise ValueError('height_scheme must be A, B, C, or D')
+    rows, seconds = [], 0.
     # An unsuccessful paired-deck fit does not establish a single-board truck.
     # Preserve available corners, but defer H until the board type is supported.
     if result.get('geometry_status') == 'partial':
@@ -867,6 +878,8 @@ def process_segmented_points_timed(xyz, labels, config: PipelineConfig):
             report = estimate_deck_height(
                 np.asarray(xyz)[np.asarray(labels) == label_id], source_corners,
                 scheme=config.height_scheme, length_fraction=fraction, width_fraction=width,
+                length_start_fraction=config.height_length_start_fraction,
+                width_start_fraction=config.height_width_start_fraction,
                 min_points=config.single_height_min_points,
                 min_tolerance=config.single_height_min_tolerance,
                 max_tolerance=config.single_height_max_tolerance,

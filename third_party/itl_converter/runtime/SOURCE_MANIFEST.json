@@ -1,0 +1,26 @@
+{
+  "pcl_source": "https://github.com/PointCloudLibrary/pcl/releases/download/pcl-1.8.1/PCL-1.8.1-AllInOne-msvc2017-win32.exe",
+  "pcl_installer_sha256": "1180abde0aabd1bd4beb52d732ae2d396800d0402eb21cd2df4c1882abf2bebe",
+  "pcl_installer_bytes": 436050008,
+  "vendor_source": "C:\\Users\\18252\\Desktop\\to_pcd.zip",
+  "files": {
+    "BZKJDEMO_pcd.exe": "d363bf8d91eb43ae0c277a8125ab748eb3f530d42467635157e444a6d43a3a7f",
+    "IntellyLaserApp.ini": "641a85e57a77838d4a3fb07d045849650d8e4232bc4d7b4eaef87474932152f5",
+    "IntellyLaserApp1.ini": "3663c318e6dbca8185a5f75e3664b93dbf02642d647bf3698e9527c827b52a63",
+    "msvcp140.dll": "916eaa54e02ab03f8065a487aed6c7960fcd70556aad0b27de547fff9d603d47",
+    "OpenNI2.dll": "fb08b818ed6f5aaeb6f58bd3e681a60d5e3836f6506459dccc6ff07a82124b6d",
+    "pcl_common_release.dll": "377145e53787ed6f04a5f0165cd78f01085569d5c2072a6bc09a3f2fe07e225c",
+    "pcl_features_release.dll": "9b45b6aedd25c4c660087611e8d4749ea9e1d9ebfa95fcca68e5181eb98db829",
+    "pcl_filters_release.dll": "3d2077d7ead30673045e5e796f70144b1042ae5c979a61c0f33338a645e0c396",
+    "pcl_io_ply_release.dll": "10c9bb46798ddf5a4db6421bb0a246f006578577b9f996116031fb040a810de4",
+    "pcl_io_release.dll": "9cdb30e315d67f3216e5b40cacdf605991b75855e1781fdc24ca713e97c8d64c",
+    "pcl_kdtree_release.dll": "2502850af12c8331424f958a5142dd8a48cbf21e99117d5ad81450a77ef1d521",
+    "pcl_ml_release.dll": "9fbb0bf39fb6a34934103426bb383f61144ec597274a5d863b7b53af481cb805",
+    "pcl_octree_release.dll": "5119ccff321f4a59be3de9bf4bfdebdc91ebb0309aeee089f2a86fa3652b2385",
+    "pcl_sample_consensus_release.dll": "1e943d4af91e7d64ca80fd5be50f300aab0e6e1fec8b4f0d351718996f69b180",
+    "pcl_search_release.dll": "feb5da8238f0296a4d136c7496f9c1f78be654e14f3e9f33e4d89039d91bb132",
+    "pcl_segmentation_release.dll": "ca6d6364e8afd10ea23a2cdbec02a0042f5d937937770d87e2d3e7ff137af263",
+    "pcl_visualization_release.dll": "bcf1aee26750e33937458476b4f16870c0449c5ba25b29e4f77d795692f62cc5",
+    "vcruntime140.dll": "cdc006fc80c4437d009b8c72008a443a9ee5bce383d8b3dc16aeec0e081cfe32"
+  }
+}

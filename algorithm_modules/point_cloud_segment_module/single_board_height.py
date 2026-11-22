@@ -155,7 +155,8 @@ def _strip_plane(points, uv, center_xy, bounds, *, min_points, min_tolerance,
     return report
 
 
-def estimate_single_board_height(points, corners, *, length_fraction=.6, width_fraction=.95,
+def estimate_single_board_height(points, corners, *, length_fraction=.6, width_fraction=.90,
+                                 length_start_fraction=.05, width_start_fraction=.05,
                                  min_points=40, min_tolerance=15., max_tolerance=40.,
                                  iterations=160, max_slope=.5, seed=42):
     """Return H only if all five strips have supported center-plane heights.
@@ -169,29 +170,34 @@ def estimate_single_board_height(points, corners, *, length_fraction=.6, width_f
         raise ValueError('Expected [N,3] points and four finite radar XYZ corners')
     if not (0 < length_fraction <= 1 and 0 < width_fraction <= 1):
         raise ValueError('Height crop fractions must be in (0,1]')
+    u0, v0 = float(length_start_fraction), float(width_start_fraction)
+    u1, v1 = u0 + length_fraction, v0 + width_fraction
+    if not (np.isfinite([u0, v0, u1, v1]).all() and 0 <= u0 < u1 <= 1 and 0 <= v0 < v1 <= 1):
+        raise ValueError('Height crop start plus retained fraction must stay within [0,1]')
     if min_points < 3 or iterations < 1 or not (0 < min_tolerance <= max_tolerance) or max_slope <= 0:
         raise ValueError('Invalid height plane support/fitting parameters')
     forward, inverse = _quad_frame(corners)
     finite = points[np.isfinite(points).all(axis=1)]
     uv = inverse(finite[:, :2])
-    crop = (uv[:, 0] >= -1e-8) & (uv[:, 0] <= length_fraction + 1e-8) & (uv[:, 1] >= -1e-8) & (uv[:, 1] <= width_fraction + 1e-8)
+    crop = (uv[:, 0] >= u0 - 1e-8) & (uv[:, 0] <= u1 + 1e-8) & (uv[:, 1] >= v0 - 1e-8) & (uv[:, 1] <= v1 + 1e-8)
     points, uv = finite[crop], uv[crop]
     order = np.lexsort((points[:, 2], uv[:, 1], uv[:, 0]))
     points, uv = points[order], uv[order]
     report = dict(method=METHOD, status='unsupported', height_mm=None,
                   coordinate_frame='radar', coordinate_unit='mm',
                   length_fraction=length_fraction, width_fraction=width_fraction,
+                  length_start_fraction=u0, width_start_fraction=v0,
+                  length_range_fraction=[u0, u1], width_range_fraction=[v0, v1],
                   width_start='P1_P3_near_scanner_side', strip_count=5,
                   source_points=int(len(finite)), cropped_points=int(len(points)),
-                  crop_radar_xy_mm=forward([[0, 0], [0, width_fraction],
-                                           [length_fraction, 0], [length_fraction, width_fraction]]).tolist(), strips=[])
-    edges = np.linspace(0, length_fraction, 6)
+                  crop_radar_xy_mm=forward([[u0, v0], [u0, v1], [u1, v0], [u1, v1]]).tolist(), strips=[])
+    edges = np.linspace(u0, u1, 6)
     for i in range(5):
         lower, upper = edges[i], edges[i + 1]
         selected = (uv[:, 0] >= lower - (1e-8 if i == 0 else 0)) & (
             uv[:, 0] <= upper + 1e-8 if i == 4 else uv[:, 0] < upper)
-        center = forward([(lower + upper) / 2, width_fraction / 2])
-        strip = _strip_plane(points[selected], uv[selected], center, [[lower, 0], [upper, width_fraction]],
+        center = forward([(lower + upper) / 2, (v0 + v1) / 2])
+        strip = _strip_plane(points[selected], uv[selected], center, [[lower, v0], [upper, v1]],
                              min_points=min_points, min_tolerance=min_tolerance,
                              max_tolerance=max_tolerance, iterations=iterations,
                              max_slope=max_slope, seed=seed + i)

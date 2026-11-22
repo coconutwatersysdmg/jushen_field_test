@@ -1,4 +1,4 @@
-runtime/
+/runtime/
 workdir/
 logs/
 __pycache__/
@@ -8,3 +8,9 @@ venv/
 存itl/
 pcd/*
 !pcd/.gitkeep
+
+# Generated analysis files and temporary dependencies.
+/outputs/
+/tmp/
+node_modules/
+~$*

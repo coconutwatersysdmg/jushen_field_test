@@ -111,18 +111,25 @@ class HeadReferenceGeometryTests(unittest.TestCase):
 
     def test_height_crop_uses_final_high_region_but_only_its_local_front_part(self):
         first_xyz, first_labels = paired(True, 4600, gradient=.01)
-        second_xyz, second_labels = paired(True, 5200, gradient=.01)
+        second_xyz, second_labels = paired(True, 5000, gradient=.01)
         a = self.run_cloud(first_xyz, first_labels)['label_2']
         b = self.run_cloud(second_xyz, second_labels)['label_2']
-        self.assertGreater(b['length_mm']-a['length_mm'], 550)
+        self.assertGreater(b['length_mm']-a['length_mm'], 350)
         self.assertGreater(b['height_mean_mm'], a['height_mean_mm'])
         for board in (a,b):
             source=np.array(board['global_plane_radar_corners_xyz_mm'])[:,:2]
-            expected=source[0]+np.array([[0,0],[0,.95],[.8,0],[.8,.95]]) @ np.stack([
+            expected=source[0]+np.array([[.05,.05],[.05,.95],[.85,.05],[.85,.95]]) @ np.stack([
                 source[2]-source[0],source[1]-source[0]])
             np.testing.assert_allclose(board['height_estimation']['crop_radar_xy_mm'],expected,atol=1e-7)
             np.testing.assert_allclose(board['height_source_radar_corners_xyz_mm'],board['global_plane_radar_corners_xyz_mm'])
             self.assertEqual(board['height_estimation']['height_crop_basis'],'final_this_deck_geometry')
+
+    def test_large_support_gap_does_not_fabricate_height_for_unsupported_last_strip(self):
+        xyz, labels = paired(True, 5200, gradient=.01)
+        board = self.run_cloud(xyz, labels)['label_2']
+        self.assertIsNone(board['height_mean_mm'])
+        self.assertEqual(board['height_estimation']['strips'][-1]['reason'], 'insufficient_spatial_coverage')
+        self.assertEqual(board['height_estimation']['status'], 'unsupported')
 
     def test_unreliable_original_high_tail_does_not_block_final_local_height_crop(self):
         xyz,labels=paired(True)

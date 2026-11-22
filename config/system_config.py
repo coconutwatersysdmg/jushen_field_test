@@ -25,11 +25,13 @@ SYSTEM_CONFIG: Dict[str, Any] = {
         "geometry_scheme": 2,
         # 高度取值方案A/B/C/D，与二维边界拟合分别控制。
         "height_scheme": "A",
+        "height_length_start_fraction": 0.05,
+        "height_width_start_fraction": 0.05,
         "single_height_length_fraction": 0.60,
         "high_height_length_fraction": 0.80,
         "low_height_length_fraction": 0.40,
-        "single_height_width_fraction": 0.95,
-        "high_low_height_width_fraction": 0.95,
+        "single_height_width_fraction": 0.90,
+        "high_low_height_width_fraction": 0.90,
     },
     "runtime": {
         # 设备模式 / Mock 开关来自 config/feature_switches.py（现场离线）

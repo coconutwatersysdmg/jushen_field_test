@@ -2,7 +2,8 @@
 
 A: five strip planes (existing default), B: area-balanced strip planes,
 C: five center-neighborhood medians, D: one whole-region plane.
-All regions start at this deck's head/usable-start and scanner-side edge.
+All regions use this deck's head/usable-start and scanner side as the UV
+origin, with explicit inset margins shared by every height method.
 """
 from __future__ import annotations
 
@@ -98,7 +99,8 @@ def _center_median(points, center, fit):
 
 
 def estimate_deck_height(points, corners, *, scheme='A', length_fraction=.6,
-                         width_fraction=.95, min_points=40, min_tolerance=15.,
+                         width_fraction=.90, length_start_fraction=.05,
+                         width_start_fraction=.05, min_points=40, min_tolerance=15.,
                          max_tolerance=40., iterations=160, max_slope=.5, seed=42):
     """Estimate this deck's reference height; never extrapolate it to corners."""
     if scheme not in METHODS:
@@ -107,7 +109,8 @@ def estimate_deck_height(points, corners, *, scheme='A', length_fraction=.6,
                max_tolerance=max_tolerance, iterations=iterations, max_slope=max_slope)
     # Preserve the validated A path exactly, including its quality checks.
     report = estimate_single_board_height(points, corners, length_fraction=length_fraction,
-                                         width_fraction=width_fraction, seed=seed, **fit)
+                                         width_fraction=width_fraction, length_start_fraction=length_start_fraction,
+                                         width_start_fraction=width_start_fraction, seed=seed, **fit)
     report['height_scheme'] = scheme
     if scheme == 'A':
         return report
@@ -118,20 +121,22 @@ def estimate_deck_height(points, corners, *, scheme='A', length_fraction=.6,
     points = np.asarray(points, float)
     points = points[np.isfinite(points).all(axis=1)]
     uv = inverse(points[:, :2])
-    keep = (uv[:, 0] >= -1e-8) & (uv[:, 0] <= length_fraction + 1e-8) & (uv[:, 1] >= -1e-8) & (uv[:, 1] <= width_fraction + 1e-8)
+    u0, u1 = report['length_range_fraction']
+    v0, v1 = report['width_range_fraction']
+    keep = (uv[:, 0] >= u0 - 1e-8) & (uv[:, 0] <= u1 + 1e-8) & (uv[:, 1] >= v0 - 1e-8) & (uv[:, 1] <= v1 + 1e-8)
     points, uv = points[keep], uv[keep]
     order = np.lexsort((points[:, 2], uv[:, 1], uv[:, 0]))
     points, uv = points[order], uv[order]
     results = []
     if scheme in ('B', 'C'):
-        edges = np.linspace(0, length_fraction, 6)
+        edges = np.linspace(u0, u1, 6)
         for i in range(5):
             lo, hi = edges[i:i+2]
             selected = (uv[:, 0] >= lo - (1e-8 if i == 0 else 0)) & (uv[:, 0] <= hi + 1e-8 if i == 4 else uv[:, 0] < hi)
-            center = forward([(lo + hi) / 2, width_fraction / 2])
+            center = forward([(lo + hi) / 2, (v0 + v1) / 2])
             if scheme == 'B':
                 result = _balanced_plane(points[selected], uv[selected], center,
-                                         [[lo, 0], [hi, width_fraction]], report['strips'][i], fit)
+                                         [[lo, v0], [hi, v1]], report['strips'][i], fit)
             else:
                 result = _center_median(points[selected], center, fit)
             result.update(index=i+1, length_range_fraction=[float(lo), float(hi)],
@@ -139,8 +144,8 @@ def estimate_deck_height(points, corners, *, scheme='A', length_fraction=.6,
             results.append(result)
         report['strips'] = results
     else:
-        center = forward([length_fraction / 2, width_fraction / 2])
-        result = _strip_plane(points, uv, center, [[0, 0], [length_fraction, width_fraction]], seed=seed, **fit)
+        center = forward([(u0 + u1) / 2, (v0 + v1) / 2])
+        result = _strip_plane(points, uv, center, [[u0, v0], [u1, v1]], seed=seed, **fit)
         result['center_radar_xyz_mm'] = [float(center[0]), float(center[1]), result.get('height_mm')]
         results = [result]
         report['strips'] = []

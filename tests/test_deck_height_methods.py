@@ -37,16 +37,16 @@ class DeckHeightMethodsTests(unittest.TestCase):
 
     def test_default_A_uses_high_80_and_low_40_from_each_own_head(self):
         high, low = self.high.copy(), self.low.copy()
-        high[(high[:, 0] > 3200.01) | (high[:, 1] > 2375.01), 2] += 300
-        low[(low[:, 0] > 8300.01) | (low[:, 1] > 2375.01), 2] += 500
+        high[(high[:, 0] < 199.99) | (high[:, 0] > 3400.01) | (high[:, 1] < 124.99) | (high[:, 1] > 2375.01), 2] += 300
+        low[(low[:, 0] < 4974.99) | (low[:, 0] > 8775.01) | (low[:, 1] < 124.99) | (low[:, 1] > 2375.01), 2] += 500
         result, original = self.run_fixed(high, low)
-        for label, expected, fraction, role in [('label_2', 1618, .8, 'high'), ('label_3', 1164, .4, 'low')]:
+        for label, expected, fraction, role in [('label_2', 1621, .8, 'high'), ('label_3', 1167, .4, 'low')]:
             board = result[label]
             self.assertAlmostEqual(board['height_mean_mm'], expected, places=3)
             self.assertEqual(board['height_estimation']['height_scheme'], 'A')
             self.assertEqual(board['height_estimation']['board_role'], role)
             self.assertEqual(board['height_estimation']['length_fraction'], fraction)
-            self.assertEqual(board['height_estimation']['width_fraction'], .95)
+            self.assertEqual(board['height_estimation']['width_fraction'], .9)
             self.assertEqual(len(board['height_estimation']['strips']), 5)
             for key in ('corners_xyz_mm', 'radar_corners_xyz_mm'):
                 np.testing.assert_array_equal(np.array(board[key])[:, :2], np.array(original[label][key])[:, :2])
@@ -55,7 +55,7 @@ class DeckHeightMethodsTests(unittest.TestCase):
             self.assertEqual(board['width_mm'], 2500.)
             self.assertEqual(board['tilt_angle_deg'], 0.)
         low_centers = [s['center_radar_xyz_mm'][0] for s in result['label_3']['height_estimation']['strips']]
-        np.testing.assert_allclose(low_centers, [4880, 5640, 6400, 7160, 7920])
+        np.testing.assert_allclose(low_centers, [5355, 6115, 6875, 7635, 8395])
         self.assertEqual(result['label_3']['height_estimation']['width_start'], 'P5_P7_near_scanner_side')
         self.assertEqual(result['label_3']['height_estimation']['crop_start_corner_ids'], ['P5', 'P6'])
 
@@ -63,7 +63,7 @@ class DeckHeightMethodsTests(unittest.TestCase):
         for scheme in 'ABCD':
             with self.subTest(scheme=scheme):
                 result, _ = self.run_fixed(scheme=scheme)
-                for label, expected in [('label_2', 1618), ('label_3', 1164)]:
+                for label, expected in [('label_2', 1621), ('label_3', 1167)]:
                     estimation = result[label]['height_estimation']
                     self.assertEqual(estimation['height_scheme'], scheme)
                     self.assertEqual(estimation['status'], 'supported')
@@ -78,7 +78,7 @@ class DeckHeightMethodsTests(unittest.TestCase):
         self.assertEqual(normalized['low_board_label'], 'label_3')
         self.assertIsNone(normalized['height_difference_mm'])
         displayed = build_board_data({'radar_result': normalized})
-        self.assertEqual(displayed[0]['radar']['height_mean_mm'], 1618)
+        self.assertEqual(displayed[0]['radar']['height_mean_mm'], 1621)
         self.assertIsNone(displayed[1]['radar']['height_mean_mm'])
 
     def test_all_method_heights_reach_world_display(self):

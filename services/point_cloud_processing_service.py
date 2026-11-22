@@ -110,6 +110,8 @@ class PointCloudProcessingService:
             "corner_height_max_slope",
             "single_height_length_fraction",
             "height_scheme",
+            "height_length_start_fraction",
+            "height_width_start_fraction",
             "high_height_length_fraction",
             "low_height_length_fraction",
             "high_low_height_width_fraction",

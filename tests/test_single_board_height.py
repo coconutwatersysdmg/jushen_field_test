@@ -22,7 +22,9 @@ def scene(count=81):
 class SingleBoardHeightTests(unittest.TestCase):
     def estimate(self, xyz, corners):
         from algorithm_modules.point_cloud_segment_module.single_board_height import estimate_single_board_height
-        return estimate_single_board_height(xyz, corners)
+        # Legacy zero-margin fixtures still verify plane support and noise rejection.
+        return estimate_single_board_height(xyz, corners, width_fraction=.95,
+                                            length_start_fraction=0., width_start_fraction=0.)
 
     def test_front_crop_centers_and_equal_strip_weight(self):
         xyz, corners = scene()
@@ -85,12 +87,12 @@ class SingleBoardHeightTests(unittest.TestCase):
                    return_value=(raw, [], .1)):
             result, rows, seconds = pipeline.process_segmented_points_timed(
                 xyz, np.full(len(xyz), 2), pipeline.PipelineConfig())
-        self.assertEqual(result['label_2']['height_mean_mm'], 1470)
+        self.assertEqual(result['label_2']['height_mean_mm'], 1480)
         self.assertEqual(result['label_2']['geometry_plane_height_mean_mm'], 1510.)
-        self.assertEqual(result['label_2']['corner_height_mean_mm'], 1470)
+        self.assertEqual(result['label_2']['corner_height_mean_mm'], 1480)
         for key in ('corners_xyz_mm', 'radar_corners_xyz_mm'):
             np.testing.assert_array_equal(np.array(result['label_2'][key])[:, :2], np.array(before['label_2'][key])[:, :2])
-            np.testing.assert_allclose(np.array(result['label_2'][key])[:, 2], 1470)
+            np.testing.assert_allclose(np.array(result['label_2'][key])[:, 2], 1480)
         self.assertEqual(result['label_2']['length_mm'], 12000.)
         self.assertEqual(result['label_2']['width_mm'], 2500.)
         self.assertEqual(result['label_2']['tilt_angle_deg'], 0.)
@@ -109,8 +111,8 @@ class SingleBoardHeightTests(unittest.TestCase):
                    return_value=(raw, [], .1)):
             result, _, _ = pipeline.process_segmented_points_timed(
                 np.vstack([xyz, low_xyz]), np.r_[np.full(len(xyz), 2), np.full(len(low_xyz), 3)], pipeline.PipelineConfig())
-        self.assertEqual(result['label_2']['height_mean_mm'], 1490)
-        self.assertEqual(result['label_3']['height_mean_mm'], 1150)
+        self.assertEqual(result['label_2']['height_mean_mm'], 1500)
+        self.assertEqual(result['label_3']['height_mean_mm'], 1160)
         for label in ('label_2', 'label_3'):
             for key in ('corners_xyz_mm', 'radar_corners_xyz_mm'):
                 np.testing.assert_array_equal(np.array(result[label][key])[:, :2], np.array(expected[label][key])[:, :2])
