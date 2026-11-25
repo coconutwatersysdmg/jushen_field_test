@@ -17,6 +17,9 @@ from PySide6.QtWidgets import (
 )
 
 from controllers.flow_controller import FlowController
+from services.field_workline_service import FieldWorklineService
+from ui.field_corner_workspace import FieldCornerWorkspace
+from ui.field_pallet_cycle_workspace import FieldPalletCycleWorkspace
 from ui.twin_bridge import TwinBridge
 from ui.debug_dialog import DebugInputDialog
 from ui.corner_review_dialog import run_corner_review
@@ -44,6 +47,17 @@ class MainWindow(QMainWindow):
         (3, "相机精定位（拍照+YOLO）"),
         (4, "B 区循环：监测 → 人工确认 → 拍照判区"),
     ]
+    # 正式现场流程（两条线）：A 每车一次角点精定位；B 每车十余次托盘循环。
+    FIELD_FLOW_STAGES = [
+        ("A1", "雷达现场扫描"),
+        ("A2", "点云处理 / 四角 P1~P4"),
+        ("A3", "结果回传 PLC"),
+        ("A4", "海康按坐标拍照 / 角点精定位"),
+        ("B1", "拍托盘 / 插孔识别"),
+        ("B2", "叉车插取放货"),
+        ("B3", "放后再拍 / 动态监测"),
+        ("B4", "未达计划件数 → 下一轮"),
+    ]
     STEP_STAGE = {
         "RADAR_TEST": 2,
         "DEVICE_CHECK":1,"FIELD_SENSE":2,"FIELD_CORNER_SHELL":3,
@@ -54,6 +68,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.controller=FlowController(); self.bridge=TwinBridge(); self.debug_inputs=self.controller.default_debug_inputs()
+        self.field_service=FieldWorklineService()
         self._step_busy=False
         self._field_auto_waiting_for_manual_place=False
         self._running_stage=0  # 正在执行的流程格编号；与 step_code（可能已前进到下一步）区分
@@ -74,6 +89,7 @@ class MainWindow(QMainWindow):
         self.resize(min(1920,max(1080,int(screen.width()*0.94))),min(1120,max(700,int(screen.height()*0.92))))
         self.setMinimumSize(1024,680)
         self._build(); self._ensure_plc_dialog(); self._load_plan(); self._apply_ui_mode(); self._refresh(); self._sync_auto_push_policy()
+        # 中间图形视图维持原样：默认显示数字孪生；现场工作区由用户点 tab 进入
 
     def _show_plc_coordinates(self):
         if self.plc_coordinates_dialog is None:
@@ -192,6 +208,22 @@ class MainWindow(QMainWindow):
         radar_row.addWidget(self.radar_pcd_label, 1)
         lay.addLayout(radar_row)
 
+        # 正式现场流程：两条业务线（A 每车一次角点 / B 每车十余次托盘循环），默认收起
+        field_flow,field_flow_l,self.field_flow_toggle=self._collapsible_card("现场作业流程",expanded=False)
+        self.field_workflow_card=field_flow
+        self.field_flow_nodes=[]
+        for row_index,stage_row in enumerate((self.FIELD_FLOW_STAGES[:4],self.FIELD_FLOW_STAGES[4:])):
+            row=QHBoxLayout(); row.setSpacing(3)
+            for index,(code,title_text) in enumerate(stage_row):
+                node=QLabel(f"{code} {title_text}\nWAIT"); node.setAlignment(Qt.AlignmentFlag.AlignCenter); node.setWordWrap(True)
+                node.setMinimumHeight(30); node.setToolTip(f"{code}：{title_text}")
+                row.addWidget(node,1); self.field_flow_nodes.append(node)
+                if index < len(stage_row)-1:
+                    arrow=QLabel("›"); arrow.setObjectName("mutedArrow"); arrow.setAlignment(Qt.AlignmentFlag.AlignCenter); row.addWidget(arrow,0)
+            field_flow_l.addLayout(row)
+        field_flow.setVisible(False)
+        lay.addWidget(field_flow,0)
+
         self.body_splitter=QSplitter(Qt.Orientation.Vertical); self.body_splitter.setChildrenCollapsible(False); lay.addWidget(self.body_splitter,1)
         main=QSplitter(Qt.Orientation.Horizontal); main.setChildrenCollapsible(False); self.body_splitter.addWidget(main); self.main_splitter=main
         left=QWidget(); ll=QVBoxLayout(left); ll.setContentsMargins(0,0,0,0); ll.setSpacing(6); main.addWidget(left)
@@ -232,6 +264,7 @@ class MainWindow(QMainWindow):
         center_wrap=QWidget(); center_wrap_l=QVBoxLayout(center_wrap); center_wrap_l.setContentsMargins(0,0,0,0); center_wrap_l.setSpacing(0)
         self.center_tab_bar=QTabBar(); self.center_tab_bar.setExpanding(False); self.center_tab_bar.setDocumentMode(True)
         self.center_tab_bar.addTab("数字孪生"); self.center_tab_bar.addTab("实时雷达"); self.center_tab_bar.addTab("本流程相机"); self.center_tab_bar.addTab("板面数据")
+        self.center_tab_bar.addTab("角点作业"); self.center_tab_bar.addTab("托盘循环")
         center_wrap_l.addWidget(self.center_tab_bar,0)
         self.center_stage=QWidget(); self.center_stage.setMinimumHeight(300)
         center_wrap_l.addWidget(self.center_stage,1)
@@ -307,6 +340,12 @@ class MainWindow(QMainWindow):
         self.center_overlay.addWidget(hist_page)
         self.board_data_panel=BoardDataPanel(self.center_stage)
         self.center_overlay.addWidget(self.board_data_panel)
+        self.corner_workspace=FieldCornerWorkspace(self.field_service, self.controller, self.center_stage)
+        self.center_overlay.addWidget(self.corner_workspace)
+        self.pallet_cycle_workspace=FieldPalletCycleWorkspace(self.field_service, self.center_stage)
+        self.center_overlay.addWidget(self.pallet_cycle_workspace)
+        self.corner_workspace.path_bar.vehicleChanged.connect(self.pallet_cycle_workspace.path_bar.set_vehicle_id)
+        self.pallet_cycle_workspace.path_bar.vehicleChanged.connect(self.corner_workspace.path_bar.set_vehicle_id)
         self._history_gallery_sig=""
         self._center_tab_index=0
         self.center_tab_bar.currentChanged.connect(self._on_center_tab_changed)
@@ -507,6 +546,8 @@ class MainWindow(QMainWindow):
             self._refresh_radar_preview(force=False)
         elif index == 2:
             self._refresh_history_gallery(force=False)
+        elif index == 4:
+            self.corner_workspace.update_from_snapshot()
 
     def _refresh_offline_media(self) -> None:
         self._refresh_radar_preview(force=True)
@@ -1023,14 +1064,45 @@ class MainWindow(QMainWindow):
     def _is_field_ui(self) -> bool:
         return True
 
+    def _is_lab_ui(self) -> bool:
+        """实验室与真实环境共用循环流程 UI；完全模拟仍用旧 12 步界面。"""
+        return str(feature_switches.RUN_PROFILE or "").strip().lower() in {"lab", "field"}
+
     def _apply_ui_mode(self) -> None:
-        self.field_flow_card.setVisible(True)
-        self.truck_card.setVisible(False)
-        self.detail_right_panel.setVisible(False)
-        self.field_right_panel.setVisible(True)
-        self.debug_btn.setVisible(True)
-        self.select_pcd_btn.setVisible(self.controller.is_radar_only_test())
-        self.main_splitter.setSizes([340, 920, 280])
+        lab = self._is_lab_ui()
+        field_mode = str(feature_switches.RUN_PROFILE or "").strip().lower() == "field"
+        if hasattr(self, "field_flow_card"):
+            self.field_flow_card.setVisible(not lab)
+        if hasattr(self, "lab_flow_card"):
+            # 现场模式不再显示实验室四步雷达测试条
+            self.lab_flow_card.setVisible(lab and not field_mode)
+        if hasattr(self, "field_workflow_card"):
+            self.field_workflow_card.setVisible(field_mode)
+        if hasattr(self, "truck_card"):
+            self.truck_card.setVisible(not lab)
+        if hasattr(self, "detail_right_panel"):
+            self.detail_right_panel.setVisible(False)
+        if hasattr(self, "field_right_panel"):
+            self.field_right_panel.setVisible(not lab)
+        if hasattr(self, "lab_right_panel"):
+            self.lab_right_panel.setVisible(lab)
+        if hasattr(self, "debug_btn"):
+            self.debug_btn.setVisible(not lab)
+        # 现场模式底栏只留现场作业需要的：进入角点作业 / 托盘循环、PLC、重置；
+        # 雷达 PCD、离线路径检查、自动运行等实验室按钮不再出现。
+        self.select_pcd_btn.setVisible((not field_mode) and self.controller.is_radar_only_test())
+        if hasattr(self, "offline_check_btn"):
+            self.offline_check_btn.setVisible(not field_mode)
+        if hasattr(self, "auto_btn"):
+            self.auto_btn.setVisible(not field_mode)
+        if hasattr(self, "plc_manual_btn"):
+            self.plc_manual_btn.setVisible(not field_mode)
+        if hasattr(self, "next_btn"):
+            self.next_btn.setVisible(not field_mode)
+        self.setWindowTitle("装载数字孪生监控台 · 现场作业")
+        if hasattr(self, "main_splitter"):
+            # 左栏中间量多，加宽；右栏收窄，相机/雷达参数走专用页
+            self.main_splitter.setSizes([360, 900, 260] if not lab else [340, 920, 280])
 
     @staticmethod
     def _first_image(value):
@@ -1613,7 +1685,57 @@ class MainWindow(QMainWindow):
         """PLC 轮询时仅放行后台画面刷新，不响应新的鼠标/键盘操作。"""
         QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
 
+    def _refresh_field_flow_chain(self) -> None:
+        """现场作业流程条：A 线取角点工作区进度，B 线取托盘循环进度。"""
+        light = is_light_theme()
+        palette = {
+            "DONE": ("#e8f5e9", "#43a047", "#1b5e20") if light else ("#123e37", "#28a985", "#9df0d3"),
+            "RUN": ("#1565c0", "#0d47a1", "#ffffff") if light else ("#0b5794", "#61c7ff", "#ffffff"),
+            "WAIT": ("#ffffff", "#c5cad3", "#5c6675") if light else ("#10243a", "#294d6d", "#8faabd"),
+        }
+        corner_states = self.corner_workspace.step_strip.states() if hasattr(self, "corner_workspace") else []
+        cycle_states = self.pallet_cycle_workspace.step_strip.states() if hasattr(self, "pallet_cycle_workspace") else []
+
+        def merged(states: list[str], *indexes: int) -> str:
+            """一个顶栏格对应工作区多步：有 RUN 显 RUN，全 DONE 才显 DONE。"""
+            picked = [states[i] for i in indexes if 0 <= i < len(states)]
+            if not picked:
+                return "WAIT"
+            if any(item == "RUN" for item in picked):
+                return "RUN"
+            if all(item == "DONE" for item in picked):
+                return "DONE"
+            return "RUN" if any(item == "DONE" for item in picked) else "WAIT"
+
+        # B 线尚未推进时整体保持 WAIT，避免初始就显示一格 RUN
+        cycle_started = bool(getattr(getattr(self, "pallet_cycle_workspace", None), "step_index", 0))
+        if not cycle_started:
+            cycle_states = ["WAIT"] * len(cycle_states)
+        # A 线 4 格 ← 角点工作区 5 步；B 线 4 格 ← 托盘循环 6 步
+        states = [
+            merged(corner_states, 0), merged(corner_states, 0),
+            merged(corner_states, 1), merged(corner_states, 2, 3),
+            merged(cycle_states, 0, 1), merged(cycle_states, 2),
+            merged(cycle_states, 3, 4), merged(cycle_states, 5),
+        ]
+        for index, node in enumerate(self.field_flow_nodes):
+            state = states[index] if index < len(states) else "WAIT"
+            if state not in palette:
+                state = "WAIT"
+            bg, border, color = palette[state]
+            code, name = self.FIELD_FLOW_STAGES[index]
+            node.setText(f"{code} {name}\n{state}")
+            node.setStyleSheet(
+                f"background:{bg};border:1px solid {border};border-radius:2px;color:{color};"
+                f"font-size:10px;font-weight:600;padding:2px 3px"
+            )
+
     def _refresh_flow_chain(self,s):
+        # 现场模式顶栏走正式现场流程，进度直接取自两个工作区，不显示实验室雷达测试条。
+        if str(feature_switches.RUN_PROFILE or "").strip().lower() == "field" and hasattr(self, "field_workflow_card"):
+            self._refresh_field_flow_chain()
+            self._update_step_controls()
+            return
         # DONE=已跑完；RUN=本点击正在执行的那一格；WAIT=等待用户点「执行下一步」或尚未轮到
         # 注意：execute_next 结束后 step_code 已指向「下一格」，不能用它+busy 画 RUN，否则会误亮下一格。
         field = self._is_field_ui()
@@ -1672,15 +1794,28 @@ class MainWindow(QMainWindow):
 
     def _refresh(self,s=None):
         s=s or self.controller.snapshot(); t=s["twin"]; self.bridge.update_state(t); self._refresh_flow_chain(s)
-        field = self._is_field_ui()
-        mode_text = ("现场首轮建图" if s["first_round"] else "现场 B 列循环")
-        if self.controller.is_radar_only_test():
-            mode_text = "仅雷达算法测试"
-        self.phase.setText(f"第 {s['round']} 轮 · {mode_text} · {s['step_name']}"); self.progress.setText(f"{s['completed']} / {s['total']}")
-        if self.controller.is_radar_only_test():
-            self.progress.setText("测试完成" if s["finished"] else ("PCD 已选择" if self.debug_inputs.get("radar_pcd_selected") else "等待选择 PCD"))
+        lab = self._is_lab_ui()
+        field_mode = str(feature_switches.RUN_PROFILE or "").strip().lower() == "field"
+        if field_mode:
+            # 现场：按两条业务线显示，不再出现"第1关 / 雷达算法测试"这类实验室字样
+            cycle = getattr(self, "pallet_cycle_workspace", None)
+            if cycle is not None and getattr(cycle, "total_rounds", 0):
+                mode_text = f"托盘循环 {cycle.round_index}/{cycle.total_rounds} 件"
+            else:
+                mode_text = "角点精定位 · 每车一次"
+            self.phase.setText(f"现场作业 · {mode_text}")
+            self.progress.setText(f"角点 {len(getattr(getattr(self, 'corner_workspace', None), 'points', []))}/4 · 托盘 {getattr(cycle, 'round_index', 0)}/{getattr(cycle, 'total_rounds', 0)}")
+        else:
+            mode_text = ("实验室首轮建图" if s["first_round"] else "实验室 B 列循环") if lab else ("首轮建图" if s["first_round"] else "循环装载（跳过雷达/角点）")
+            if self.controller.is_radar_only_test():
+                mode_text = "仅雷达算法测试"
+            self.phase.setText(f"第 {s['round']} 轮 · {mode_text} · {s['step_name']}"); self.progress.setText(f"{s['completed']} / {s['total']}")
+            if self.controller.is_radar_only_test():
+                self.progress.setText("测试完成" if s["finished"] else ("PCD 已选择" if self.debug_inputs.get("radar_pcd_selected") else "等待选择 PCD"))
         rd=s.get("round_data") or {}; cargo=t.get("cargo") or {}; p=cargo.get("pose") or {}; truck=t.get("truck") or {}; target=truck.get("current_target") or {}; tp=target.get("final_world_pose") or {}; fb=t.get("feedback_compensation_mm") or {}
         self.board_data_panel.update_from_round_data(rd)
+        if hasattr(self, "corner_workspace"):
+            self.corner_workspace.update_from_snapshot(s)
         hole=((rd.get("pick_result") or {}).get("hole_result") or {})
         self._refresh_live_metrics(s, t, rd)
         self._fill_kv(self.cargo_table,[

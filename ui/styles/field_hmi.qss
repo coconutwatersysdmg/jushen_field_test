@@ -1,0 +1,18 @@
+/* 现场大字号叠加层：在 hmi_monitor.qss 之后加载，只放大字号和点击区。 */
+* { font-size: 13px; }
+
+QLabel#clusterLabel, QLabel#mutedLabel, QLabel#titleSub { font-size: 12px; }
+QLabel#sectionTitle { font-size: 14px; }
+QLabel#title { font-size: 18px; }
+QLabel#phaseLabel, QLabel#progressLabel, QLabel#accentInfo, QLabel#successInfo { font-size: 13px; }
+
+QPushButton {
+    font-size: 13px;
+    min-height: 30px;
+    padding: 4px 10px;
+}
+QComboBox, QCheckBox, QLineEdit, QTextEdit, QPlainTextEdit { font-size: 13px; }
+QTableWidget, QTableView { font-size: 13px; }
+QHeaderView::section { font-size: 12px; min-height: 24px; padding: 3px 4px; }
+QTabBar::tab { font-size: 13px; min-height: 26px; padding: 5px 12px; }
+QListWidget { font-size: 12px; }

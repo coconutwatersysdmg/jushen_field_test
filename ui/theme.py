@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QApplication
 
 STYLES = Path(__file__).resolve().parent / "styles"
 HMI_OVERLAY = STYLES / "hmi_monitor.qss"
+FIELD_OVERLAY = STYLES / "field_hmi.qss"
 LIGHT_MATERIAL_OVERLAY = STYLES / "light_material_overlay.qss"
 DARK_OVERLAY = STYLES / "industrial_overlay.qss"
 DARK_MATERIAL_THEME = STYLES / "dark_industrial.xml"
@@ -64,6 +65,7 @@ def twin_clear_color() -> QColor:
 def load_overlay_qss(name: str) -> str:
     mapping = {
         "hmi": HMI_OVERLAY,
+        "field": FIELD_OVERLAY,
         "light": LIGHT_MATERIAL_OVERLAY,
         "dark": DARK_OVERLAY,
     }
@@ -73,9 +75,9 @@ def load_overlay_qss(name: str) -> str:
     return ""
 
 
-def _apply_app_font(app: QApplication) -> None:
+def _apply_app_font(app: QApplication, point_size: int = 9) -> None:
     # Dense HMI base: 9pt ≈ 12 logical px on 96 DPI; QSS further sets 10–11px.
-    font = QFont("Microsoft YaHei UI", 9)
+    font = QFont("Microsoft YaHei UI", point_size)
     font.setStyleHint(QFont.StyleHint.SansSerif)
     font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
     app.setFont(font)
@@ -172,6 +174,7 @@ def apply_app_theme(app: QApplication | None = None) -> str:
 
     Env ``JUSHEN_UI_THEME``:
       - ``hmi`` / ``light`` / unset (default): industrial monitor HMI
+      - ``field`` / ``site``: same HMI with larger on-site typography
       - ``material`` / ``pink``: qt-material light gallery
       - ``dark``: dark industrial
     """
@@ -181,10 +184,15 @@ def apply_app_theme(app: QApplication | None = None) -> str:
     if app is None:
         raise RuntimeError("QApplication must exist before apply_app_theme()")
 
-    _apply_app_font(app)
     choice = str(os.environ.get("JUSHEN_UI_THEME", "hmi") or "hmi").strip().lower()
+    _apply_app_font(app, 10 if choice in {"field", "site", "现场"} else 9)
 
-    if choice in {"dark", "qdarktheme", "industrial"}:
+    if choice in {"field", "site", "现场"}:
+        # 现场作业：保留浅色工业底色，叠加一层更大的字号与按钮点击区。
+        _ACTIVE_MODE = "light"
+        overlay = load_overlay_qss("hmi") + "\n" + load_overlay_qss("field")
+        engines = [_apply_hmi]
+    elif choice in {"dark", "qdarktheme", "industrial"}:
         _ACTIVE_MODE = "dark"
         overlay = load_overlay_qss("dark")
         engines = [_apply_qdarktheme, _apply_qt_material_dark, _apply_fallback_dark]

@@ -6,7 +6,9 @@ __pycache__/
 .venv/
 venv/
 存itl/
-pcd/*
+# 采集数据（PCD/itl 体积达数十 GB）只留本地备份，不进仓库
+/PCD/
+/pcd/
 !pcd/.gitkeep
 
 # Generated analysis files and temporary dependencies.
